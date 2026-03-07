@@ -1,0 +1,27 @@
+import 'dart:io';
+import 'package:connectivity_plus/connectivity_plus.dart';
+
+class NetworkService {
+  /// Cek apakah benar-benar online
+  static Future<bool> isOnline() async {
+    try {
+      final connectivityResult = await Connectivity().checkConnectivity();
+
+      if (connectivityResult == ConnectivityResult.none) {
+        return false;
+      }
+
+      final result = await InternetAddress.lookup(
+        'google.com',
+      ).timeout(const Duration(seconds: 3));
+
+      if (result.isNotEmpty && result[0].rawAddress.isNotEmpty) {
+        return true;
+      }
+
+      return false;
+    } catch (_) {
+      return false;
+    }
+  }
+}
