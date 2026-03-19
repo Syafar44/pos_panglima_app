@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -6,8 +7,7 @@ import 'package:pos_panglima_app/services/helper/dio_client.dart';
 import 'package:pos_panglima_app/services/sift_service.dart';
 import 'package:pos_panglima_app/services/storage/shift_storage_service.dart';
 import 'package:pos_panglima_app/utils/convert.dart';
-import 'package:pos_panglima_app/utils/modal_error.dart';
-import 'package:pos_panglima_app/views/widgets/error_modal.dart';
+import 'package:pos_panglima_app/utils/modal_handling.dart';
 import 'package:pos_panglima_app/views/widgets_tree.dart';
 
 class StartsiftModal extends StatefulWidget {
@@ -56,14 +56,9 @@ class _StartsiftModalState extends State<StartsiftModal> {
             : 0;
         isLoadingProfile = false;
       });
-    } catch (e) {
+    } on DioException catch (e) {
       isLoadingProfile = false;
-      showDialog(
-        context: context,
-        builder: (context) {
-          return ModalError();
-        },
-      );
+      print('error shift ini ================= ${e.response}');
     }
   }
 
@@ -113,7 +108,8 @@ class _StartsiftModalState extends State<StartsiftModal> {
       showDialog(
         context: context,
         builder: (context) {
-          return ErrorModal(
+          return ModalHandling(
+            type: 'warning',
             title: 'Jadwal Shift Sudah diambil',
             description:
                 'Jadwal shift yang Anda pilih sudah pernah diambil hari ini. Pilih shift lain atau hubungi supervisor.',

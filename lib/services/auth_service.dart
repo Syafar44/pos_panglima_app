@@ -17,6 +17,10 @@ class AuthService {
     return dio.post("/auth", data: payload);
   }
 
+  Future<Response> postFcmToken(Map<String, dynamic> payload) {
+    return dio.post("/users-token", data: payload);
+  }
+
   Future<Response> getProfile() {
     return dio.get("/me");
   }

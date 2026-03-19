@@ -4,7 +4,7 @@ import 'package:pos_panglima_app/services/auth_service.dart';
 import 'package:pos_panglima_app/services/helper/dio_client.dart';
 import 'package:pos_panglima_app/services/inventory_service.dart';
 import 'package:pos_panglima_app/utils/convert.dart';
-import 'package:pos_panglima_app/utils/modal_error.dart';
+import 'package:pos_panglima_app/utils/modal_handling.dart';
 import 'package:pos_panglima_app/views/widgets/confirm_modal.dart';
 import 'package:pos_panglima_app/views/widgets_tree.dart';
 
@@ -63,7 +63,12 @@ class _ReceptionInventoryPageState extends State<ReceptionInventoryPage> {
       showDialog(
         context: context,
         builder: (context) {
-          return ModalError();
+          return ModalHandling(
+            type: 'warning',
+            title: 'Gagal memuat data inventory',
+            description:
+                'Terjadi kendala saat mengambil data inventory. Mohon periksa koneksi atau coba kembali.',
+          );
         },
       );
     }
@@ -83,7 +88,12 @@ class _ReceptionInventoryPageState extends State<ReceptionInventoryPage> {
       showDialog(
         context: context,
         builder: (context) {
-          return ModalError();
+          return ModalHandling(
+            type: 'warning',
+            title: 'Gagal memuat data pengguna',
+            description:
+                'Terjadi kendala saat mengambil data pengguna. Mohon periksa koneksi atau coba kembali.',
+          );
         },
       );
     }
@@ -173,7 +183,12 @@ class _ReceptionInventoryPageState extends State<ReceptionInventoryPage> {
       showDialog(
         context: context,
         builder: (context) {
-          return ModalError();
+          return ModalHandling(
+            type: 'danger',
+            title: 'Gagal melakukan Realisasi',
+            description:
+                'Terjadi kendala saat melakukan Realisasi. Silakan coba kembali.',
+          );
         },
       );
     }

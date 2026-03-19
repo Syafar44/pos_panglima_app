@@ -54,6 +54,8 @@ dependencies:
   mime: ^2.0.0
   number_pagination: ^1.1.6
   flutter_launcher_icons: ^0.14.4
+  firebase_messaging: ^16.1.2
+  firebase: ^9.0.3
 
 dev_dependencies:
   flutter_test:

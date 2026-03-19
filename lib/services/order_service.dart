@@ -21,6 +21,10 @@ class OrderService {
     return dio.get('/pos/order/$id');
   }
 
+  Future<Response> checkVoucher(Map<String, dynamic> payload) {
+    return dio.post('/pos/voucher/check', data: payload);
+  }
+
   Future<Response> getOrderList(
     int userId,
     int page,

@@ -4,8 +4,7 @@ import 'package:pos_panglima_app/services/helper/dio_client.dart';
 import 'dart:async';
 import 'package:pos_panglima_app/services/storage/shift_storage_service.dart';
 import 'package:pos_panglima_app/utils/convert.dart';
-import 'package:pos_panglima_app/utils/modal_error.dart';
-import 'package:pos_panglima_app/views/widgets/error_modal.dart';
+import 'package:pos_panglima_app/utils/modal_handling.dart';
 
 class UpdateProductModalWidget extends StatefulWidget {
   const UpdateProductModalWidget({
@@ -191,7 +190,12 @@ class _UpdateProductModalWidgetState extends State<UpdateProductModalWidget> {
       showDialog(
         context: context,
         builder: (context) {
-          return ModalError();
+          return ModalHandling(
+            type: 'danger',
+            title: 'Update gagal',
+            description:
+                'Terjadi kesalahan saat memperbarui data. Mohon periksa koneksi atau coba kembali.',
+          );
         },
       );
     } finally {
@@ -294,7 +298,8 @@ class _UpdateProductModalWidgetState extends State<UpdateProductModalWidget> {
                                 showDialog(
                                   context: context,
                                   builder: (context) {
-                                    return ErrorModal(
+                                    return ModalHandling(
+                                      type: 'warning',
                                       title: 'Perhatian',
                                       description:
                                           'Shift belum dimulai. Mulai shift terlebih dahulu untuk melakukan transaksi.',

@@ -1,6 +1,6 @@
 import 'dart:async';
-
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:number_pagination/number_pagination.dart';
 import 'package:pos_panglima_app/services/auth_service.dart';
 import 'package:pos_panglima_app/services/helper/dio_client.dart';
@@ -8,7 +8,7 @@ import 'package:pos_panglima_app/services/order_service.dart';
 import 'package:pos_panglima_app/utils/convert.dart';
 import 'package:blue_thermal_printer/blue_thermal_printer.dart';
 import 'package:pos_panglima_app/services/bluetooth_printer_service.dart';
-import 'package:pos_panglima_app/utils/modal_error.dart';
+import 'package:pos_panglima_app/utils/modal_handling.dart';
 
 class RiwayatPenjualanPage extends StatefulWidget {
   const RiwayatPenjualanPage({super.key});
@@ -68,9 +68,6 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
   }
 
   Future<void> _fetchOrders() async {
-    print(
-      "🔍 Fetching: page=$selectedPageNumber, search=${controllerSearch.text}",
-    );
     try {
       final response = await orderService.getOrderList(
         userId ?? 0,
@@ -78,7 +75,6 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
         10,
         controllerSearch.text,
       );
-      print("✅ Response: ${response.data}");
       final raw = response.data['data']['data'] as List<dynamic>;
       final pagination = response.data['data']['metadata'];
       final mapped = raw.map((e) => Map<String, dynamic>.from(e)).toList();
@@ -98,7 +94,12 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
       showDialog(
         context: context,
         builder: (context) {
-          return ModalError();
+          return ModalHandling(
+            type: 'danger',
+            title: 'Gagal memuat riwayat penjualan',
+            description:
+                'Terjadi kesalahan saat mengambil data riwayat penjualan. Mohon periksa koneksi atau coba kembali.',
+          );
         },
       );
     }
@@ -109,6 +110,7 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
       setState(() => isLoadingOrdersDetail = true);
 
       final response = await orderService.getOrderDetail(id);
+      print(response);
 
       setState(() {
         orderId = id;
@@ -119,7 +121,12 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
       showDialog(
         context: context,
         builder: (context) {
-          return ModalError();
+          return ModalHandling(
+            type: 'danger',
+            title: 'Gagal memuat detail',
+            description:
+                'Terjadi kesalahan saat mengambil detail. Mohon periksa koneksi atau coba kembali.',
+          );
         },
       );
     }
@@ -141,7 +148,12 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
       showDialog(
         context: context,
         builder: (context) {
-          return ModalError();
+          return ModalHandling(
+            type: 'warning',
+            title: 'Gagal memuat data pengguna',
+            description:
+                'Terjadi kendala saat mengambil data pengguna. Mohon periksa koneksi atau coba kembali.',
+          );
         },
       );
     }
@@ -151,11 +163,13 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
     try {
       await BluetoothPrinterService.printStruk(
         documentNumber: orderDetail?['document_number'],
-        usersName: orderDetail?['users_name'], 
+        usersName: orderDetail?['users_name'],
         listProduk: orderDetail?['pos_order_lines'],
-        totalQuantity: 0, // harus di isi
+        totalQuantity: orderDetail?['jumlah_item'],
         isCash: orderDetail?['is_cash'] == 1 ? true : false,
-        method: orderDetail?['pos_order_method_id'] == 1 ? 'Takeaway' : 'Delivery',
+        method: orderDetail?['pos_order_method_id'] == 1
+            ? 'Takeaway'
+            : 'Delivery',
         paymentMethod: orderDetail?['pos_payment_method_name'],
         totalPayment: orderDetail?['total_amount'],
         subTotal: orderDetail?['subtotal_amount'],
@@ -163,7 +177,17 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
         isPayment: false,
       );
     } catch (e) {
-      print("❌ Failed to print struk: $e");
+      showDialog(
+        context: context,
+        builder: (context) {
+          return ModalHandling(
+            type: 'warning',
+            title: 'Gagal mencetak struk',
+            description:
+                'Terjadi kesalahan saat mencetak struk data riwayat penjualan. Mohon coba kembali.',
+          );
+        },
+      );
     }
   }
 
@@ -187,32 +211,70 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
             child: Column(
               children: [
                 Container(
-                  padding: EdgeInsets.symmetric(horizontal: 12.0),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16.0,
+                    vertical: 12.0,
+                  ), // Padding luar agar tidak nempel ke tepi
                   decoration: BoxDecoration(
-                    border: Border(bottom: BorderSide(color: Colors.black26)),
-                  ),
-                  child: TextField(
-                    controller: controllerSearch,
-                    autofocus: true,
-                    decoration: const InputDecoration(
-                      icon: Icon(Icons.search),
-                      hintText: 'Cari Riwayat Penjualan...',
-                      border: InputBorder.none,
-                      contentPadding: EdgeInsets.symmetric(
-                        vertical: 10,
-                        horizontal: 6,
-                      ),
+                    color: Colors.white,
+                    border: Border(
+                      bottom: BorderSide(
+                        color: Colors.grey[200]!,
+                      ), // Garis pemisah yang lebih halus
                     ),
-                    onChanged: (value) {
-                      if (_debounce?.isActive ?? false) _debounce!.cancel();
-                      _debounce = Timer(const Duration(milliseconds: 1000), () {
-                        print(
-                          '======================== debounce aktif ================================',
+                  ),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors
+                          .grey[100], // Background abu-abu muda agar terlihat kedalam
+                      borderRadius: BorderRadius.circular(12.0),
+                      border: Border.all(color: Colors.grey[300]!),
+                    ),
+                    child: TextField(
+                      controller: controllerSearch,
+                      autofocus:
+                          false, // Disarankan false agar keyboard tidak tiba-tiba muncul
+                      style: const TextStyle(fontSize: 14.0),
+                      decoration: InputDecoration(
+                        prefixIcon: const Icon(
+                          Icons.search,
+                          color: Colors.grey,
+                        ),
+                        // Tombol hapus teks (muncul hanya jika ada teks)
+                        suffixIcon: controllerSearch.text.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(
+                                  Icons.cancel,
+                                  color: Colors.grey,
+                                  size: 20,
+                                ),
+                                onPressed: () {
+                                  controllerSearch.clear();
+                                  setState(() => selectedPageNumber = 1);
+                                  _fetchOrders();
+                                },
+                              )
+                            : null,
+                        hintText: 'Cari nomor dokumen...',
+                        hintStyle: TextStyle(color: Colors.grey[500]),
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(
+                          vertical: 12,
+                          horizontal: 16,
+                        ),
+                      ),
+                      onChanged: (value) {
+                        if (_debounce?.isActive ?? false) _debounce!.cancel();
+                        _debounce = Timer(
+                          const Duration(milliseconds: 800),
+                          () {
+                            // Debounce 800ms cukup responsif
+                            setState(() => selectedPageNumber = 1);
+                            _fetchOrders();
+                          },
                         );
-                        setState(() => selectedPageNumber = 1);
-                        _fetchOrders();
-                      });
-                    },
+                      },
+                    ),
                   ),
                 ),
                 Expanded(
@@ -220,125 +282,176 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
                       ? Center(child: CircularProgressIndicator())
                       : Stack(
                           children: [
-                            SingleChildScrollView(
+                            ListView.separated(
                               controller: _scrollController,
-                              child: Column(
-                                spacing: 10.0,
-                                children: orderList.map((order) {
-                                  final isActive = orderId == order['id'];
-                                  return InkWell(
-                                    onTap: () {
-                                      orderId = order['id'];
-                                      _fetchOrderDetail(orderId!);
-                                    },
-                                    child: Container(
+                              padding: const EdgeInsets.all(16.0),
+                              itemCount: orderList.length,
+                              separatorBuilder: (context, index) =>
+                                  const SizedBox(height: 12),
+                              itemBuilder: (context, index) {
+                                final order = orderList[index];
+                                final isActive = orderId == order['id'];
+
+                                return InkWell(
+                                  onTap: () {
+                                    orderId = order['id'];
+                                    _fetchOrderDetail(orderId!);
+                                  },
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: AnimatedContainer(
+                                    duration: const Duration(milliseconds: 200),
+                                    decoration: BoxDecoration(
                                       color: isActive
-                                          ? Colors.amber[100]
-                                          : Colors.grey[100],
-                                      padding: EdgeInsets.symmetric(
-                                        vertical: 10.0,
-                                        horizontal: 20.0,
+                                          ? Colors.amber[50]
+                                          : Colors.white,
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: isActive
+                                            ? Colors.orange
+                                            : Colors.grey[200]!,
+                                        width: isActive ? 2 : 1,
                                       ),
-                                      width: double.infinity,
-                                      child: Column(
-                                        children: [
-                                          Row(
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.spaceBetween,
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.center,
-                                            children: [
-                                              Row(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.center,
-                                                children: [
-                                                  Icon(
-                                                    Icons.payment,
-                                                    size: 60.0,
-                                                    color: Colors.black87,
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withOpacity(0.03),
+                                          blurRadius: 10,
+                                          offset: const Offset(0, 4),
+                                        ),
+                                      ],
+                                    ),
+                                    padding: const EdgeInsets.all(16.0),
+                                    child: Column(
+                                      children: [
+                                        // Bagian Atas: Nomor Dokumen & Waktu
+                                        Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Row(
+                                              children: [
+                                                Container(
+                                                  padding: const EdgeInsets.all(
+                                                    8,
                                                   ),
-                                                  SizedBox(width: 5.0),
-                                                  Column(
-                                                    crossAxisAlignment:
-                                                        CrossAxisAlignment
-                                                            .start,
-                                                    children: [
-                                                      Text(
-                                                        order['document_number'],
-                                                        style: TextStyle(
-                                                          fontWeight:
-                                                              FontWeight.bold,
-                                                          fontSize: 16.0,
+                                                  decoration: BoxDecoration(
+                                                    color: isActive
+                                                        ? Colors.amber
+                                                        : Colors.grey[100],
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          8,
                                                         ),
-                                                      ),
-                                                      Text(
-                                                        'Total ${convertIDR(order['total_amount'])}',
-                                                      ),
-                                                    ],
                                                   ),
-                                                ],
+                                                  child: Icon(
+                                                    Icons.receipt_long_outlined,
+                                                    size: 20,
+                                                    color: isActive
+                                                        ? Colors.black87
+                                                        : Colors.grey[600],
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 12),
+                                                Column(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
+                                                  children: [
+                                                    Text(
+                                                      order['document_number'],
+                                                      style: const TextStyle(
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                        fontSize: 15.0,
+                                                      ),
+                                                    ),
+                                                    Text(
+                                                      formatDateTime(
+                                                        order['created_at'],
+                                                      ),
+                                                      style: TextStyle(
+                                                        fontSize: 12,
+                                                        color: Colors.grey[500],
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ],
+                                            ),
+                                            Text(
+                                              convertIDR(order['total_amount']),
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 16.0,
+                                                color: Colors.blueAccent,
                                               ),
-                                              Text(
-                                                formatDateTime(
-                                                  order['created_at'],
+                                            ),
+                                          ],
+                                        ),
+
+                                        const Padding(
+                                          padding: EdgeInsets.symmetric(
+                                            vertical: 12,
+                                          ),
+                                          child: Divider(
+                                            height: 1,
+                                            thickness: 0.5,
+                                          ),
+                                        ),
+
+                                        // Bagian Bawah: Info Method & User
+                                        Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            // Payment Method & Kasir
+                                            Row(
+                                              children: [
+                                                _buildSmallBadge(
+                                                  icon: Icons
+                                                      .account_balance_wallet_outlined,
+                                                  label:
+                                                      order['pos_payment_method_name'],
+                                                ),
+                                                const SizedBox(width: 8),
+                                                _buildSmallBadge(
+                                                  icon: Icons.person_outline,
+                                                  label: 'Kasir',
+                                                ),
+                                              ],
+                                            ),
+                                            // Order Method (Takeaway/Delivery/Compliment)
+                                            Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 10,
+                                                    vertical: 4,
+                                                  ),
+                                              decoration: BoxDecoration(
+                                                color: _getMethodColor(
+                                                  order['pos_order_method_id'],
+                                                ).withOpacity(0.1),
+                                                borderRadius:
+                                                    BorderRadius.circular(20),
+                                              ),
+                                              child: Text(
+                                                _getMethodLabel(
+                                                  order['pos_order_method_id'],
+                                                ),
+                                                style: TextStyle(
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: _getMethodColor(
+                                                    order['pos_order_method_id'],
+                                                  ),
                                                 ),
                                               ),
-                                            ],
-                                          ),
-                                          Divider(),
-                                          Row(
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.spaceBetween,
-                                            children: [
-                                              Row(
-                                                children: [
-                                                  Row(
-                                                    children: [
-                                                      Icon(
-                                                        Icons.payment,
-                                                        color: Colors.black87,
-                                                      ),
-                                                      SizedBox(width: 5.0),
-                                                      Text(
-                                                        order['pos_payment_method_name'],
-                                                        style: TextStyle(
-                                                          color: Colors.black87,
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                  SizedBox(width: 10.0),
-                                                  Row(
-                                                    children: [
-                                                      Icon(
-                                                        Icons.person,
-                                                        color: Colors.black87,
-                                                      ),
-                                                      SizedBox(width: 5.0),
-                                                      Text(
-                                                        'Kasir',
-                                                        style: TextStyle(
-                                                          color: Colors.black87,
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ],
-                                              ),
-                                              Text(
-                                                order['pos_order_method_id'] ==
-                                                        1
-                                                    ? 'Takeaway'
-                                                    : 'Delivery',
-                                              ),
-                                            ],
-                                          ),
-                                        ],
-                                      ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
                                     ),
-                                  );
-                                }).toList(),
-                              ),
+                                  ),
+                                );
+                              },
                             ),
                             Positioned(
                               bottom: 0,
@@ -368,22 +481,44 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
                           ],
                         ),
                 ),
-                NumberPagination(
-                  onPageChanged: (int pageNumber) {
-                    //To optimize further, use a package that supports partial updates instead of setState (e.g. riverpod)
-                    setState(() {
-                      selectedPageNumber = pageNumber;
-                      isLoadingOrdersList = true;
-                    });
-                    _fetchOrders();
-                  },
-                  visiblePagesCount: 3,
-                  totalPages: paginationInfo?['total_page'] ?? 0,
-                  currentPage: selectedPageNumber,
-                  enableInteraction: false,
-                  buttonRadius: 10,
-                  selectedButtonColor: Colors.amber,
-                  selectedNumberColor: Colors.black,
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 2.0,
+                    horizontal: 16.0,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    border: Border(
+                      top: BorderSide(
+                        color: Colors.grey[200]!,
+                      ), // Garis halus di atas pagination
+                    ),
+                  ),
+                  child: NumberPagination(
+                    onPageChanged: (int pageNumber) {
+                      setState(() {
+                        selectedPageNumber = pageNumber;
+                        isLoadingOrdersList = true;
+                      });
+                      _fetchOrders();
+                    },
+                    visiblePagesCount: 3,
+                    totalPages: paginationInfo?['total_page'] ?? 0,
+                    currentPage: selectedPageNumber,
+                    // --- Custom Styling ---
+                    buttonRadius: 12, // Membuat tombol sedikit lebih bulat
+                    selectedButtonColor: Colors.amber.shade400,
+                    selectedNumberColor: Colors.black,
+                    unSelectedButtonColor: Colors.grey[100]!,
+                    unSelectedNumberColor: Colors.grey[700]!,
+                    numberButtonSize: const Size(35, 35),
+                    controlButtonSize: const Size(35, 35),
+                    fontSize: 14,
+                    sectionSpacing: 5,
+                    navigationButtonSpacing: 0,
+                    // Tambahkan properti lain jika package mendukung,
+                    // seperti padding atau icon panah custom.
+                  ),
                 ),
               ],
             ),
@@ -396,58 +531,87 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
               : Column(
                   children: [
                     Container(
-                      padding: EdgeInsets.symmetric(horizontal: 20.0),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20.0,
+                        vertical: 12.5,
+                      ),
                       decoration: BoxDecoration(
+                        color: Colors.white,
                         border: Border(
-                          bottom: BorderSide(color: Colors.black26),
+                          top: BorderSide(
+                            color: Colors.grey[200]!,
+                          ), // Gunakan top border jika diletakkan di bawah
+                          bottom: BorderSide(color: Colors.grey[200]!),
                         ),
                       ),
                       child: Row(
                         children: [
+                          // 1. Tombol Share (Outlined)
                           Expanded(
-                            child: OutlinedButton(
-                              onPressed: () {},
-                              style: IconButton.styleFrom(
-                                backgroundColor: Colors.white,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                              ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.share, color: Colors.black87),
-                                  SizedBox(width: 5),
-                                  Text(
-                                    'Share Struk',
-                                    style: TextStyle(color: Colors.black87),
+                            child: SizedBox(
+                              height: 48,
+                              child: OutlinedButton(
+                                onPressed: () {
+                                  // Tambahkan fungsi share di sini
+                                },
+                                style: OutlinedButton.styleFrom(
+                                  side: BorderSide(color: Colors.grey[300]!),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
                                   ),
-                                ],
+                                  foregroundColor: Colors.black87,
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: const [
+                                    Icon(Icons.share_outlined, size: 20),
+                                    SizedBox(width: 8),
+                                    Text(
+                                      'Share',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           ),
-                          SizedBox(width: 20.0),
+
+                          const SizedBox(
+                            width: 16.0,
+                          ), // Jarak antar tombol yang pas
+                          // 2. Tombol Cetak (Solid Amber)
                           Expanded(
-                            child: ElevatedButton(
-                              onPressed: () {
-                                handlePrintStruk();
-                              },
-                              style: IconButton.styleFrom(
-                                backgroundColor: Colors.amber,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                              ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.print, color: Colors.black87),
-                                  SizedBox(width: 5),
-                                  Text(
-                                    'Cetak Struk',
-                                    style: TextStyle(color: Colors.black87),
+                            child: SizedBox(
+                              height: 48,
+                              child: ElevatedButton(
+                                onPressed: () {
+                                  // getar
+                                  HapticFeedback.lightImpact();
+                                  handlePrintStruk();
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.amber,
+                                  foregroundColor: Colors.black87,
+                                  elevation: 0,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
                                   ),
-                                ],
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: const [
+                                    Icon(Icons.print_outlined, size: 20),
+                                    SizedBox(width: 8),
+                                    Text(
+                                      'Cetak Struk',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           ),
@@ -459,508 +623,1115 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
                         child: Container(
                           padding: EdgeInsets.all(20.0),
                           child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            spacing: 10.0,
                             children: [
+                              // Text(
+                              //   'Informasi Penjualan',
+                              //   style: TextStyle(
+                              //     fontSize: 18.0,
+                              //     fontWeight: FontWeight.bold,
+                              //   ),
+                              // ),
+                              // Row(
+                              //   children: [
+                              //     Expanded(
+                              //       child: Column(
+                              //         spacing: 20.0,
+                              //         crossAxisAlignment:
+                              //             CrossAxisAlignment.start,
+                              //         children: [
+                              //           Row(
+                              //             spacing: 10.0,
+                              //             children: [
+                              //               Icon(
+                              //                 Icons.article,
+                              //                 size: 50.0,
+                              //                 color: Colors.black87,
+                              //               ),
+                              //               Column(
+                              //                 crossAxisAlignment:
+                              //                     CrossAxisAlignment.start,
+                              //                 children: [
+                              //                   Text('ID Penjualan'),
+                              //                   Text(
+                              //                     orderDetail?['document_number'] ??
+                              //                         '-',
+                              //                     style: TextStyle(
+                              //                       fontSize: 16.0,
+                              //                     ),
+                              //                   ),
+                              //                 ],
+                              //               ),
+                              //             ],
+                              //           ),
+                              //           Row(
+                              //             spacing: 10.0,
+                              //             children: [
+                              //               Icon(
+                              //                 Icons.calendar_month,
+                              //                 size: 50.0,
+                              //                 color: Colors.black87,
+                              //               ),
+                              //               Column(
+                              //                 crossAxisAlignment:
+                              //                     CrossAxisAlignment.start,
+                              //                 children: [
+                              //                   Text('Tanggal Penjualan'),
+                              //                   Text(
+                              //                     formatDateTime(
+                              //                       orderDetail?['created_at'],
+                              //                     ),
+                              //                     style: TextStyle(
+                              //                       fontSize: 16.0,
+                              //                     ),
+                              //                   ),
+                              //                 ],
+                              //               ),
+                              //             ],
+                              //           ),
+                              //         ],
+                              //       ),
+                              //     ),
+                              //     Expanded(
+                              //       child: Column(
+                              //         spacing: 20.0,
+                              //         crossAxisAlignment:
+                              //             CrossAxisAlignment.start,
+                              //         children: [
+                              //           Row(
+                              //             spacing: 10.0,
+                              //             children: [
+                              //               Icon(
+                              //                 Icons.group,
+                              //                 size: 50.0,
+                              //                 color: Colors.black87,
+                              //               ),
+                              //               Column(
+                              //                 crossAxisAlignment:
+                              //                     CrossAxisAlignment.start,
+                              //                 children: [
+                              //                   Text('Nama Pelanggan'),
+                              //                   Text(
+                              //                     orderDetail?['customers_name'] ??
+                              //                         '-',
+                              //                     style: TextStyle(
+                              //                       fontSize: 16.0,
+                              //                     ),
+                              //                   ),
+                              //                 ],
+                              //               ),
+                              //             ],
+                              //           ),
+                              //           Row(
+                              //             spacing: 10.0,
+                              //             children: [
+                              //               Icon(
+                              //                 Icons.person,
+                              //                 size: 50.0,
+                              //                 color: Colors.black87,
+                              //               ),
+                              //               Column(
+                              //                 crossAxisAlignment:
+                              //                     CrossAxisAlignment.start,
+                              //                 children: [
+                              //                   Text('Dibuat Oleh'),
+                              //                   Text(
+                              //                     orderDetail?['users_name'] ??
+                              //                         '-',
+                              //                     style: TextStyle(
+                              //                       fontSize: 16.0,
+                              //                     ),
+                              //                   ),
+                              //                 ],
+                              //               ),
+                              //             ],
+                              //           ),
+                              //         ],
+                              //       ),
+                              //     ),
+                              //   ],
+                              // ),
+                              const Text(
+                                'Informasi Penjualan',
+                                style: TextStyle(
+                                  fontSize: 18.0,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                              // Grid Informasi menggunakan Wrap atau Row
+                              Container(
+                                padding: const EdgeInsets.all(16.0),
+                                decoration: BoxDecoration(
+                                  color: Colors.grey[50],
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: Colors.grey[200]!),
+                                ),
+                                child: Column(
+                                  children: [
+                                    Row(
+                                      children: [
+                                        _buildInfoTile(
+                                          icon: Icons.article_outlined,
+                                          label: 'ID Penjualan',
+                                          value:
+                                              orderDetail?['document_number'] ??
+                                              '-',
+                                        ),
+                                        _buildInfoTile(
+                                          icon: Icons.person_outline,
+                                          label: 'Nama Pelanggan',
+                                          value:
+                                              orderDetail?['customers_name'] ??
+                                              '-',
+                                        ),
+                                      ],
+                                    ),
+                                    const Padding(
+                                      padding: EdgeInsets.symmetric(
+                                        vertical: 12.0,
+                                      ),
+                                      child: Divider(height: 1, thickness: 0.5),
+                                    ),
+                                    Row(
+                                      children: [
+                                        _buildInfoTile(
+                                          icon: Icons.calendar_month_outlined,
+                                          label: 'Tanggal Penjualan',
+                                          value: formatDateTime(
+                                            orderDetail?['created_at'],
+                                          ),
+                                        ),
+                                        _buildInfoTile(
+                                          icon: Icons.account_circle_outlined,
+                                          label: 'Dibuat Oleh',
+                                          value:
+                                              orderDetail?['users_name'] ?? '-',
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Divider(),
+                              // Text(
+                              //   orderDetail?['pos_order_method_name'] ==
+                              //           'Compliment'
+                              //       ? 'Status Compliment'
+                              //       : 'Informasi Penerimaan',
+                              //   style: TextStyle(
+                              //     fontSize: 18.0,
+                              //     fontWeight: FontWeight.bold,
+                              //   ),
+                              // ),
+                              // Container(
+                              //   padding: EdgeInsets.all(20.0),
+                              //   decoration: BoxDecoration(
+                              //     color: Colors.grey[100],
+                              //     border: Border.all(color: Colors.black26),
+                              //     borderRadius: BorderRadius.all(
+                              //       Radius.circular(10.0),
+                              //     ),
+                              //   ),
+                              //   child:
+                              //       orderDetail?['pos_order_method_name'] ==
+                              //           'Compliment'
+                              //       ? Center(
+                              //           child: Container(
+                              //             padding: EdgeInsets.symmetric(
+                              //               horizontal: 20,
+                              //               vertical: 12,
+                              //             ),
+                              //             decoration: BoxDecoration(
+                              //               color:
+                              //                   orderDetail?['is_compliment_status'] ==
+                              //                       1
+                              //                   ? Colors.green.shade100
+                              //                   : Colors.red.shade100,
+                              //               border: Border.all(
+                              //                 width: 2,
+                              //                 color:
+                              //                     orderDetail?['is_compliment_status'] ==
+                              //                         1
+                              //                     ? Colors.green
+                              //                     : Colors.red,
+                              //               ),
+                              //               borderRadius: BorderRadius.all(
+                              //                 Radius.circular(12),
+                              //               ),
+                              //             ),
+                              //             child: Text(
+                              //               orderDetail?['is_compliment_status'] ==
+                              //                       1
+                              //                   ? 'Approved'
+                              //                   : 'Rejected',
+                              //               style: TextStyle(
+                              //                 color:
+                              //                     orderDetail?['is_compliment_status'] ==
+                              //                         1
+                              //                     ? Colors.green
+                              //                     : Colors.red,
+                              //                 fontSize: 20,
+                              //                 fontWeight: FontWeight.bold,
+                              //               ),
+                              //             ),
+                              //           ),
+                              //         )
+                              //       : Row(
+                              //           mainAxisAlignment:
+                              //               MainAxisAlignment.spaceAround,
+                              //           children: [
+                              //             Column(
+                              //               children: [
+                              //                 Text('Total Penerimaan'),
+                              //                 Text(
+                              //                   convertIDR(
+                              //                     orderDetail?['total_amount'] ??
+                              //                         0,
+                              //                   ),
+                              //                   style: TextStyle(
+                              //                     fontSize: 21.0,
+                              //                     color: Colors.orange,
+                              //                     fontWeight: FontWeight.bold,
+                              //                   ),
+                              //                 ),
+                              //               ],
+                              //             ),
+                              //             SizedBox(
+                              //               height: 50.0,
+                              //               child: VerticalDivider(
+                              //                 thickness: 1,
+                              //                 color: Colors.black26,
+                              //               ),
+                              //             ),
+                              //             Column(
+                              //               children: [
+                              //                 Text('Total Bayar'),
+                              //                 Text(
+                              //                   convertIDR(
+                              //                     orderDetail?['pay_amount'] ??
+                              //                         0,
+                              //                   ),
+                              //                   style: TextStyle(
+                              //                     fontSize: 21.0,
+                              //                     color: Colors.orange,
+                              //                     fontWeight: FontWeight.bold,
+                              //                   ),
+                              //                 ),
+                              //               ],
+                              //             ),
+                              //             SizedBox(
+                              //               height: 50.0,
+                              //               child: VerticalDivider(
+                              //                 thickness: 1,
+                              //                 color: Colors.black26,
+                              //               ),
+                              //             ),
+                              //             Column(
+                              //               children: [
+                              //                 Text('Kembali'),
+                              //                 Text(
+                              //                   convertIDR(
+                              //                     orderDetail?['pay_amount'] -
+                              //                             orderDetail?['total_amount'] ??
+                              //                         0,
+                              //                   ),
+                              //                   style: TextStyle(
+                              //                     fontSize: 21.0,
+                              //                     color: Colors.orange,
+                              //                     fontWeight: FontWeight.bold,
+                              //                   ),
+                              //                 ),
+                              //               ],
+                              //             ),
+                              //           ],
+                              //         ),
+                              // ),
+                              Text(
+                                orderDetail?['pos_order_method_name'] ==
+                                        'Compliment'
+                                    ? 'Status Compliment'
+                                    : 'Informasi Pembayaran',
+                                style: const TextStyle(
+                                  fontSize: 18.0,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.all(20.0),
+                                decoration: BoxDecoration(
+                                  color: Colors
+                                      .white, // Ganti ke putih agar shadow terlihat bersih
+                                  borderRadius: BorderRadius.circular(12.0),
+                                  border: Border.all(color: Colors.grey[200]!),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.03),
+                                      blurRadius: 10,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ],
+                                ),
+                                child:
+                                    orderDetail?['pos_order_method_name'] ==
+                                        'Compliment'
+                                    ? _buildComplimentStatus(
+                                        orderDetail?['is_compliment_status'],
+                                      )
+                                    : _buildPaymentInfo(orderDetail),
+                              ),
+                              // Text(
+                              //   orderDetail?['keterangan'] == ''
+                              //       ? 'Riwayat Penerimaan'
+                              //       : 'Keterangan Compliment',
+                              //   style: TextStyle(
+                              //     fontSize: 18.0,
+                              //     fontWeight: FontWeight.bold,
+                              //   ),
+                              // ),
+                              // Container(
+                              //   padding: EdgeInsets.only(bottom: 20.0),
+                              //   decoration: BoxDecoration(
+                              //     border: Border(
+                              //       bottom: BorderSide(color: Colors.black26),
+                              //     ),
+                              //   ),
+                              //   child: orderDetail?['keterangan'] != ''
+                              //       ? SizedBox(
+                              //           width: double.infinity,
+                              //           child: Text(
+                              //             orderDetail?['keterangan'],
+                              //             style: TextStyle(fontSize: 16),
+                              //           ),
+                              //         )
+                              //       : Row(
+                              //           mainAxisAlignment:
+                              //               MainAxisAlignment.spaceBetween,
+                              //           children: [
+                              //             Column(
+                              //               crossAxisAlignment:
+                              //                   CrossAxisAlignment.start,
+                              //               children: [
+                              //                 Text(
+                              //                   orderDetail?['document_number'] ??
+                              //                       '-',
+                              //                   style: TextStyle(
+                              //                     fontSize: 18.0,
+                              //                     fontWeight: FontWeight.bold,
+                              //                   ),
+                              //                 ),
+                              //                 Text(
+                              //                   orderDetail?['pos_payment_method_name'] ??
+                              //                       '-',
+                              //                   style: TextStyle(
+                              //                     fontSize: 16.0,
+                              //                   ),
+                              //                 ),
+                              //               ],
+                              //             ),
+                              //             Column(
+                              //               crossAxisAlignment:
+                              //                   CrossAxisAlignment.end,
+                              //               children: [
+                              //                 Text(
+                              //                   formatDateTime(
+                              //                     orderDetail?['created_at'],
+                              //                   ),
+                              //                   style: TextStyle(
+                              //                     fontSize: 16.0,
+                              //                   ),
+                              //                 ),
+                              //                 Text(
+                              //                   convertIDR(
+                              //                     orderDetail?['total_amount'] ??
+                              //                         0,
+                              //                   ),
+                              //                   style: TextStyle(
+                              //                     fontSize: 22.0,
+                              //                     fontWeight: FontWeight.bold,
+                              //                     color: Colors.orange,
+                              //                   ),
+                              //                 ),
+                              //               ],
+                              //             ),
+                              //           ],
+                              //         ),
+                              // ),
                               Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
-                                spacing: 10.0,
                                 children: [
+                                  const Divider(height: 32),
                                   Text(
-                                    'Informasi Penjualan',
-                                    style: TextStyle(
+                                    orderDetail?['keterangan'] != ''
+                                        ? 'Keterangan Compliment'
+                                        : 'Riwayat Penerimaan',
+                                    style: const TextStyle(
                                       fontSize: 18.0,
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
-                                  Row(
-                                    children: [
-                                      Expanded(
-                                        child: Column(
-                                          spacing: 20.0,
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Row(
-                                              spacing: 10.0,
-                                              children: [
-                                                Icon(
-                                                  Icons.article,
-                                                  size: 50.0,
-                                                  color: Colors.black87,
-                                                ),
-                                                Column(
-                                                  crossAxisAlignment:
-                                                      CrossAxisAlignment.start,
-                                                  children: [
-                                                    Text('ID Penjualan'),
-                                                    Text(
-                                                      orderDetail?['document_number'] ??
-                                                          '-',
-                                                      style: TextStyle(
-                                                        fontSize: 16.0,
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ],
-                                            ),
-                                            Row(
-                                              spacing: 10.0,
-                                              children: [
-                                                Icon(
-                                                  Icons.calendar_month,
-                                                  size: 50.0,
-                                                  color: Colors.black87,
-                                                ),
-                                                Column(
-                                                  crossAxisAlignment:
-                                                      CrossAxisAlignment.start,
-                                                  children: [
-                                                    Text('Tanggal Penjualan'),
-                                                    Text(
-                                                      formatDateTime(
-                                                        orderDetail?['created_at'],
-                                                      ),
-                                                      style: TextStyle(
-                                                        fontSize: 16.0,
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ],
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      Expanded(
-                                        child: Column(
-                                          spacing: 20.0,
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Row(
-                                              spacing: 10.0,
-                                              children: [
-                                                Icon(
-                                                  Icons.group,
-                                                  size: 50.0,
-                                                  color: Colors.black87,
-                                                ),
-                                                Column(
-                                                  crossAxisAlignment:
-                                                      CrossAxisAlignment.start,
-                                                  children: [
-                                                    Text('Nama Pelanggan'),
-                                                    Text(
-                                                      orderDetail?['customers_name'] ??
-                                                          '-',
-                                                      style: TextStyle(
-                                                        fontSize: 16.0,
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ],
-                                            ),
-                                            Row(
-                                              spacing: 10.0,
-                                              children: [
-                                                Icon(
-                                                  Icons.person,
-                                                  size: 50.0,
-                                                  color: Colors.black87,
-                                                ),
-                                                Column(
-                                                  crossAxisAlignment:
-                                                      CrossAxisAlignment.start,
-                                                  children: [
-                                                    Text('Dibuat Oleh'),
-                                                    Text(
-                                                      orderDetail?['users_name'] ??
-                                                          '-',
-                                                      style: TextStyle(
-                                                        fontSize: 16.0,
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ],
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  Divider(),
-                                  Text(
-                                    'Informasi Penerimaan',
-                                    style: TextStyle(
-                                      fontSize: 18.0,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
+                                  const SizedBox(height: 16),
                                   Container(
-                                    padding: EdgeInsets.all(20.0),
+                                    width: double.infinity,
+                                    padding: const EdgeInsets.all(16.0),
                                     decoration: BoxDecoration(
-                                      color: Colors.grey[100],
-                                      border: Border.all(color: Colors.black26),
-                                      borderRadius: BorderRadius.all(
-                                        Radius.circular(10.0),
+                                      color: orderDetail?['keterangan'] != ''
+                                          ? Colors
+                                                .amber
+                                                .shade50 // Beri warna berbeda untuk catatan/keterangan
+                                          : Colors.transparent,
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: orderDetail?['keterangan'] != ''
+                                            ? Colors.amber.shade200
+                                            : Colors.grey[200]!,
                                       ),
                                     ),
-                                    child: Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.spaceAround,
-                                      children: [
-                                        Column(
-                                          children: [
-                                            Text('Total Penerimaan'),
-                                            Text(
-                                              convertIDR(
-                                                orderDetail?['total_amount'] ??
-                                                    0,
-                                              ),
-                                              style: TextStyle(
-                                                fontSize: 21.0,
-                                                color: Colors.orange,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                        SizedBox(
-                                          height: 50.0,
-                                          child: VerticalDivider(
-                                            thickness: 1,
-                                            color: Colors.black26,
-                                          ),
-                                        ),
-                                        Column(
-                                          children: [
-                                            Text('Total Bayar'),
-                                            Text(
-                                              convertIDR(
-                                                orderDetail?['pay_amount'] ?? 0,
-                                              ),
-                                              style: TextStyle(
-                                                fontSize: 21.0,
-                                                color: Colors.orange,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                        SizedBox(
-                                          height: 50.0,
-                                          child: VerticalDivider(
-                                            thickness: 1,
-                                            color: Colors.black26,
-                                          ),
-                                        ),
-                                        Column(
-                                          children: [
-                                            Text('Kembali'),
-                                            Text(
-                                              convertIDR(
-                                                orderDetail?['pay_amount'] -
-                                                        orderDetail?['total_amount'] ??
-                                                    0,
-                                              ),
-                                              style: TextStyle(
-                                                fontSize: 21.0,
-                                                color: Colors.orange,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  Text(
-                                    'Riwayat Penerimaan',
-                                    style: TextStyle(
-                                      fontSize: 18.0,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  Container(
-                                    padding: EdgeInsets.only(bottom: 20.0),
-                                    decoration: BoxDecoration(
-                                      border: Border(
-                                        bottom: BorderSide(
-                                          color: Colors.black26,
-                                        ),
-                                      ),
-                                    ),
-                                    child: Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              orderDetail?['document_number'] ??
-                                                  '-',
-                                              style: TextStyle(
-                                                fontSize: 18.0,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
-                                            Text(
-                                              orderDetail?['pos_payment_method_name'] ??
-                                                  '-',
-                                              style: TextStyle(fontSize: 16.0),
-                                            ),
-                                          ],
-                                        ),
-                                        Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.end,
-                                          children: [
-                                            Text(
-                                              formatDateTime(
-                                                orderDetail?['created_at'],
-                                              ),
-                                              style: TextStyle(fontSize: 16.0),
-                                            ),
-                                            Text(
-                                              convertIDR(
-                                                orderDetail?['total_amount'] ??
-                                                    0,
-                                              ),
-                                              style: TextStyle(
-                                                fontSize: 22.0,
-                                                fontWeight: FontWeight.bold,
-                                                color: Colors.orange,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  Text(
-                                    'Barang & Jasa',
-                                    style: TextStyle(
-                                      fontSize: 18.0,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  Column(
-                                    spacing: 12,
-                                    children: (orderDetail?['pos_order_lines'] as List).map((
-                                      line,
-                                    ) {
-                                      return Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.spaceBetween,
-                                        children: [
-                                          Row(
-                                            spacing: 15.0,
+                                    child: orderDetail?['keterangan'] != ''
+                                        ? Row(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
                                             children: [
-                                              Container(
-                                                width: 170,
-                                                height: 100,
-                                                decoration: BoxDecoration(
-                                                  gradient: LinearGradient(
-                                                    colors: [
-                                                      secondColor(
-                                                        line['pos_menus_name'],
-                                                      ),
-                                                      baseColor(
-                                                        line['pos_menus_name'],
-                                                      ),
-                                                    ],
-                                                    begin: Alignment.topLeft,
-                                                    end: Alignment.bottomRight,
-                                                  ),
-                                                  borderRadius:
-                                                      BorderRadius.circular(10),
-                                                ),
-                                                alignment: Alignment.center,
+                                              Icon(
+                                                Icons.sticky_note_2_outlined,
+                                                color: Colors.amber[800],
+                                                size: 20,
+                                              ),
+                                              const SizedBox(width: 10),
+                                              Expanded(
                                                 child: Text(
-                                                  getInitials(
-                                                    line['pos_menus_name'],
-                                                  ),
+                                                  orderDetail?['keterangan'],
                                                   style: TextStyle(
-                                                    fontWeight: FontWeight.bold,
-                                                    fontSize: 60,
+                                                    fontSize: 15.0,
+                                                    color: Colors.amber[900],
+                                                    fontStyle: FontStyle.italic,
                                                   ),
                                                 ),
                                               ),
+                                            ],
+                                          )
+                                        : Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              // Bagian Kiri: Info Transaksi
                                               Column(
                                                 crossAxisAlignment:
                                                     CrossAxisAlignment.start,
-                                                spacing: 22.0,
                                                 children: [
-                                                  Column(
-                                                    crossAxisAlignment:
-                                                        CrossAxisAlignment
-                                                            .start,
-                                                    children: [
-                                                      Text(
-                                                        line['pos_menus_name'],
-                                                        style: TextStyle(
-                                                          fontSize: 18.0,
-                                                          fontWeight:
-                                                              FontWeight.bold,
-                                                        ),
-                                                      ),
-                                                      Text(
-                                                        '${line['quantity']} Pcs',
-                                                      ),
-                                                    ],
-                                                  ),
                                                   Text(
-                                                    'Diinput Oleh: ${orderDetail?['users_name']}',
+                                                    orderDetail?['document_number'] ??
+                                                        '-',
+                                                    style: const TextStyle(
+                                                      fontSize: 14.0,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                      color: Colors.black87,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 4),
+                                                  Container(
+                                                    padding:
+                                                        const EdgeInsets.symmetric(
+                                                          horizontal: 8,
+                                                          vertical: 4,
+                                                        ),
+                                                    decoration: BoxDecoration(
+                                                      color:
+                                                          Colors.blue.shade50,
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            6,
+                                                          ),
+                                                    ),
+                                                    child: Text(
+                                                      orderDetail?['pos_payment_method_name'] ??
+                                                          '-',
+                                                      style: TextStyle(
+                                                        fontSize: 12.0,
+                                                        color: Colors.blue[700],
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                              // Bagian Kanan: Waktu & Nominal
+                                              Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.end,
+                                                children: [
+                                                  Text(
+                                                    formatDateTime(
+                                                      orderDetail?['created_at'],
+                                                    ),
+                                                    style: TextStyle(
+                                                      fontSize: 12.0,
+                                                      color: Colors.grey[600],
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 4),
+                                                  Text(
+                                                    convertIDR(
+                                                      orderDetail?['total_amount'] ??
+                                                          0,
+                                                    ),
+                                                    style: const TextStyle(
+                                                      fontSize: 18.0,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                      color: Colors.black87,
+                                                    ),
                                                   ),
                                                 ],
                                               ),
                                             ],
                                           ),
-                                          Text(
-                                            convertIDR(line['total']),
-                                            style: TextStyle(
-                                              fontSize: 20.0,
-                                              color: Colors.orange,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                        ],
-                                      );
-                                    }).toList(),
                                   ),
-                                  Container(
-                                    padding: EdgeInsets.symmetric(
-                                      vertical: 20.0,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      border: Border(
-                                        bottom: BorderSide(
-                                          color: Colors.black26,
-                                        ),
-                                      ),
+                                  const SizedBox(
+                                    height: 20,
+                                  ), // Padding bawah sebelum masuk ke list produk
+                                ],
+                              ),
+                              // Text(
+                              //   'Barang & Jasa',
+                              //   style: TextStyle(
+                              //     fontSize: 18.0,
+                              //     fontWeight: FontWeight.bold,
+                              //   ),
+                              // ),
+                              // Column(
+                              //   spacing: 12,
+                              //   children: (orderDetail?['pos_order_lines'] as List).map((
+                              //     line,
+                              //   ) {
+                              //     return Row(
+                              //       mainAxisAlignment:
+                              //           MainAxisAlignment.spaceBetween,
+                              //       children: [
+                              //         Row(
+                              //           spacing: 15.0,
+                              //           children: [
+                              //             Container(
+                              //               width: 170,
+                              //               height: 100,
+                              //               decoration: BoxDecoration(
+                              //                 gradient: LinearGradient(
+                              //                   colors: [
+                              //                     secondColor(
+                              //                       line['pos_menus_name'],
+                              //                     ),
+                              //                     baseColor(
+                              //                       line['pos_menus_name'],
+                              //                     ),
+                              //                   ],
+                              //                   begin: Alignment.topLeft,
+                              //                   end: Alignment.bottomRight,
+                              //                 ),
+                              //                 borderRadius:
+                              //                     BorderRadius.circular(10),
+                              //               ),
+                              //               alignment: Alignment.center,
+                              //               child: Text(
+                              //                 getInitials(
+                              //                   line['pos_menus_name'],
+                              //                 ),
+                              //                 style: TextStyle(
+                              //                   fontWeight: FontWeight.bold,
+                              //                   fontSize: 60,
+                              //                 ),
+                              //               ),
+                              //             ),
+                              //             Column(
+                              //               crossAxisAlignment:
+                              //                   CrossAxisAlignment.start,
+                              //               spacing: 22.0,
+                              //               children: [
+                              //                 Column(
+                              //                   crossAxisAlignment:
+                              //                       CrossAxisAlignment.start,
+                              //                   children: [
+                              //                     Text(
+                              //                       line['pos_menus_name'],
+                              //                       style: TextStyle(
+                              //                         fontSize: 18.0,
+                              //                         fontWeight:
+                              //                             FontWeight.bold,
+                              //                       ),
+                              //                     ),
+                              //                     Text(
+                              //                       '${line['quantity']} Pcs',
+                              //                     ),
+                              //                   ],
+                              //                 ),
+                              //                 Column(
+                              //                   crossAxisAlignment:
+                              //                       CrossAxisAlignment.start,
+                              //                   children:
+                              //                       (line['pos_order_lines_material']
+                              //                               as List)
+                              //                           .map((item) {
+                              //                             return Text(
+                              //                               '${item['quantity']}x ${item['items_name']}',
+                              //                             );
+                              //                           })
+                              //                           .toList(),
+                              //                 ),
+                              //                 Text(
+                              //                   'Diinput Oleh: ${orderDetail?['users_name']}',
+                              //                 ),
+                              //               ],
+                              //             ),
+                              //           ],
+                              //         ),
+                              //         Text(
+                              //           convertIDR(line['total']),
+                              //           style: TextStyle(
+                              //             fontSize: 20.0,
+                              //             color: Colors.orange,
+                              //             fontWeight: FontWeight.bold,
+                              //           ),
+                              //         ),
+                              //       ],
+                              //     );
+                              //   }).toList(),
+                              // ),
+                              Text(
+                                'Barang & Jasa',
+                                style: TextStyle(
+                                  fontSize: 18.0,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              // Menggunakan ListView.separated atau Column dengan Divider antar item
+                              Column(
+                                children: (orderDetail?['pos_order_lines'] as List).map((
+                                  line,
+                                ) {
+                                  return Padding(
+                                    padding: const EdgeInsets.only(
+                                      bottom: 20.0,
                                     ),
                                     child: Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        // 1. Thumbnail / Inisial Menu
+                                        Container(
+                                          width:
+                                              60, // Diperkecil agar proporsional
+                                          height: 60,
+                                          decoration: BoxDecoration(
+                                            gradient: LinearGradient(
+                                              colors: [
+                                                secondColor(
+                                                  line['pos_menus_name'],
+                                                ),
+                                                baseColor(
+                                                  line['pos_menus_name'],
+                                                ),
+                                              ],
+                                            ),
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
+                                          ),
+                                          alignment: Alignment.center,
+                                          child: Text(
+                                            getInitials(line['pos_menus_name']),
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize:
+                                                  20, // Ukuran font disesuaikan
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 16),
+
+                                        // 2. Info Detail Produk
+                                        // ... di dalam bagian Info Detail Produk (Expanded)
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              // 1. Nama Produk & Label (jika ada)
+                                              Row(
+                                                children: [
+                                                  Expanded(
+                                                    child: Text(
+                                                      line['pos_menus_name']
+                                                          .toUpperCase(), // Uppercase untuk ketegasan
+                                                      style: const TextStyle(
+                                                        fontSize: 15.0,
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                        color: Color(
+                                                          0xFF2D3436,
+                                                        ),
+                                                        letterSpacing: 0.5,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                              const SizedBox(height: 4),
+
+                                              // 2. Harga Satuan & Kuantitas dengan Badge
+                                              Row(
+                                                children: [
+                                                  Container(
+                                                    padding:
+                                                        const EdgeInsets.symmetric(
+                                                          horizontal: 6,
+                                                          vertical: 2,
+                                                        ),
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.grey[200],
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            4,
+                                                          ),
+                                                    ),
+                                                    child: Text(
+                                                      '${line['quantity']}x',
+                                                      style: const TextStyle(
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                        fontSize: 12,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 8),
+                                                  Text(
+                                                    convertIDR(
+                                                      line['price'] ?? 0,
+                                                    ),
+                                                    style: TextStyle(
+                                                      color: Colors.grey[600],
+                                                      fontSize: 13,
+                                                      fontWeight:
+                                                          FontWeight.w500,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+
+                                              // 3. Section Material / Add-ons (Dibuat seperti struk fisik)
+                                              if (line['pos_order_lines_material'] !=
+                                                      null &&
+                                                  (line['pos_order_lines_material']
+                                                          as List)
+                                                      .isNotEmpty)
+                                                Container(
+                                                  margin: const EdgeInsets.only(
+                                                    top: 8,
+                                                    left: 4,
+                                                  ),
+                                                  padding:
+                                                      const EdgeInsets.only(
+                                                        left: 12,
+                                                      ),
+                                                  decoration: BoxDecoration(
+                                                    border: Border(
+                                                      left: BorderSide(
+                                                        color:
+                                                            Colors.grey[300]!,
+                                                        width: 2,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  child: Column(
+                                                    crossAxisAlignment:
+                                                        CrossAxisAlignment
+                                                            .start,
+                                                    children:
+                                                        (line['pos_order_lines_material']
+                                                                as List)
+                                                            .map((item) {
+                                                              return Padding(
+                                                                padding:
+                                                                    const EdgeInsets.only(
+                                                                      bottom: 2,
+                                                                    ),
+                                                                child: Text(
+                                                                  '+ ${item['items_name']} (${item['quantity']})',
+                                                                  style: TextStyle(
+                                                                    fontSize:
+                                                                        12,
+                                                                    color: Colors
+                                                                        .blueGrey[600],
+                                                                    fontStyle:
+                                                                        FontStyle
+                                                                            .italic,
+                                                                  ),
+                                                                ),
+                                                              );
+                                                            })
+                                                            .toList(),
+                                                  ),
+                                                ),
+
+                                              // 4. Footer Item (User & Note)
+                                              const SizedBox(height: 8),
+                                              Row(
+                                                children: [
+                                                  Icon(
+                                                    Icons.person_outline,
+                                                    size: 12,
+                                                    color: Colors.black,
+                                                  ),
+                                                  const SizedBox(width: 4),
+                                                  Text(
+                                                    'Admin: ${orderDetail?['users_name']}',
+                                                    style: TextStyle(
+                                                      fontSize: 11,
+                                                      color: Colors.black,
+                                                      fontWeight:
+                                                          FontWeight.w400,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+
+                                        // 3. Subtotal
+                                        Text(
+                                          convertIDR(line['total']),
+                                          style: const TextStyle(
+                                            fontSize: 16.0,
+                                            color: Colors.black87,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                              // Container(
+                              //   padding: EdgeInsets.symmetric(vertical: 20.0),
+                              //   decoration: BoxDecoration(
+                              //     border: Border(
+                              //       bottom: BorderSide(color: Colors.black26),
+                              //     ),
+                              //   ),
+                              //   child: Row(
+                              //     mainAxisAlignment:
+                              //         MainAxisAlignment.spaceBetween,
+                              //     children: [
+                              //       Text(
+                              //         'Subtotal Order',
+                              //         style: TextStyle(
+                              //           fontSize: 18.0,
+                              //           fontWeight: FontWeight.bold,
+                              //         ),
+                              //       ),
+                              //       Text(
+                              //         convertIDR(
+                              //           orderDetail?['subtotal_amount'],
+                              //         ),
+                              //         style: TextStyle(
+                              //           fontSize: 20.0,
+                              //           color: Colors.orange,
+                              //           fontWeight: FontWeight.bold,
+                              //         ),
+                              //       ),
+                              //     ],
+                              //   ),
+                              // ),
+                              // Container(
+                              //   padding: EdgeInsets.symmetric(vertical: 20.0),
+                              //   decoration: BoxDecoration(
+                              //     border: Border(
+                              //       bottom: BorderSide(color: Colors.black26),
+                              //     ),
+                              //   ),
+                              //   child: Column(
+                              //     spacing: 10,
+                              //     children: [
+                              //       Row(
+                              //         mainAxisAlignment:
+                              //             MainAxisAlignment.spaceBetween,
+                              //         children: [
+                              //           Text(
+                              //             'Subtotal',
+                              //             style: TextStyle(
+                              //               fontSize: 18.0,
+                              //               fontWeight: FontWeight.bold,
+                              //             ),
+                              //           ),
+                              //           Text(
+                              //             convertIDR(
+                              //               orderDetail?['subtotal_amount'],
+                              //             ),
+                              //             style: TextStyle(
+                              //               fontSize: 20.0,
+                              //               color: Colors.orange,
+                              //               fontWeight: FontWeight.bold,
+                              //             ),
+                              //           ),
+                              //         ],
+                              //       ),
+                              //       if (orderDetail?['discount_amount'] != 0)
+                              //         Row(
+                              //           mainAxisAlignment:
+                              //               MainAxisAlignment.spaceBetween,
+                              //           children: [
+                              //             Text(
+                              //               'Diskon',
+                              //               style: TextStyle(
+                              //                 fontSize: 18.0,
+                              //                 fontWeight: FontWeight.bold,
+                              //               ),
+                              //             ),
+                              //             Text(
+                              //               '- ${convertIDR(orderDetail?['discount_amount'])}',
+                              //               style: TextStyle(
+                              //                 fontSize: 20.0,
+                              //                 color: Colors.orange,
+                              //                 fontWeight: FontWeight.bold,
+                              //               ),
+                              //             ),
+                              //           ],
+                              //         ),
+                              //     ],
+                              //   ),
+                              // ),
+                              // Container(
+                              //   padding: EdgeInsets.symmetric(vertical: 20.0),
+                              //   child: Row(
+                              //     mainAxisAlignment:
+                              //         MainAxisAlignment.spaceBetween,
+                              //     children: [
+                              //       Text(
+                              //         'GRAND TOTAL',
+                              //         style: TextStyle(
+                              //           fontSize: 20.0,
+                              //           fontWeight: FontWeight.bold,
+                              //         ),
+                              //       ),
+                              //       Text(
+                              //         convertIDR(orderDetail?['total_amount']),
+                              //         style: TextStyle(
+                              //           fontSize: 22.0,
+                              //           color: Colors.orange,
+                              //           fontWeight: FontWeight.bold,
+                              //         ),
+                              //       ),
+                              //     ],
+                              //   ),
+                              // ),
+                              Container(
+                                padding: const EdgeInsets.all(20.0),
+                                decoration: BoxDecoration(
+                                  color: Colors
+                                      .grey[50], // Beri background tipis agar terpisah dari list barang
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: Column(
+                                  children: [
+                                    // 1. Baris Subtotal
+                                    Row(
                                       mainAxisAlignment:
                                           MainAxisAlignment.spaceBetween,
                                       children: [
                                         Text(
                                           'Subtotal Order',
                                           style: TextStyle(
-                                            fontSize: 18.0,
-                                            fontWeight: FontWeight.bold,
+                                            fontSize: 16.0,
+                                            color: Colors.grey[700],
                                           ),
                                         ),
                                         Text(
                                           convertIDR(
-                                            orderDetail?['subtotal_amount'],
+                                            orderDetail?['subtotal_amount'] ??
+                                                0,
                                           ),
-                                          style: TextStyle(
-                                            fontSize: 20.0,
-                                            color: Colors.orange,
-                                            fontWeight: FontWeight.bold,
+                                          style: const TextStyle(
+                                            fontSize: 16.0,
+                                            fontWeight: FontWeight.w600,
+                                            color: Colors.black87,
                                           ),
                                         ),
                                       ],
                                     ),
-                                  ),
-                                  Container(
-                                    padding: EdgeInsets.symmetric(
-                                      vertical: 20.0,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      border: Border(
-                                        bottom: BorderSide(
-                                          color: Colors.black26,
+
+                                    // 2. Baris Diskon (Hanya muncul jika ada diskon)
+                                    if (orderDetail?['discount_amount'] !=
+                                            null &&
+                                        orderDetail?['discount_amount'] != 0)
+                                      Padding(
+                                        padding: const EdgeInsets.only(
+                                          top: 12.0,
                                         ),
-                                      ),
-                                    ),
-                                    child: Column(
-                                      spacing: 10,
-                                      children: [
-                                        Row(
+                                        child: Row(
                                           mainAxisAlignment:
                                               MainAxisAlignment.spaceBetween,
                                           children: [
                                             Text(
-                                              'Subtotal',
+                                              'Diskon',
                                               style: TextStyle(
-                                                fontSize: 18.0,
-                                                fontWeight: FontWeight.bold,
+                                                fontSize: 16.0,
+                                                color: Colors.red[400],
                                               ),
                                             ),
                                             Text(
-                                              convertIDR(
-                                                orderDetail?['subtotal_amount'],
-                                              ),
+                                              '- ${convertIDR(orderDetail?['discount_amount'])}',
                                               style: TextStyle(
-                                                fontSize: 20.0,
-                                                color: Colors.orange,
-                                                fontWeight: FontWeight.bold,
+                                                fontSize: 16.0,
+                                                color: Colors.red[700],
+                                                fontWeight: FontWeight.w600,
                                               ),
                                             ),
                                           ],
                                         ),
-                                        if (orderDetail?['discount_amount'] !=
-                                            0)
-                                          Row(
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.spaceBetween,
-                                            children: [
-                                              Text(
-                                                'Diskon',
-                                                style: TextStyle(
-                                                  fontSize: 18.0,
-                                                  fontWeight: FontWeight.bold,
-                                                ),
-                                              ),
-                                              Text(
-                                                convertIDR(
-                                                  orderDetail?['discount_amount'],
-                                                ),
-                                                style: TextStyle(
-                                                  fontSize: 20.0,
-                                                  color: Colors.orange,
-                                                  fontWeight: FontWeight.bold,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                      ],
+                                      ),
+
+                                    // 3. Garis Pemisah (Dash/Divider)
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 15.0,
+                                      ),
+                                      child: Divider(
+                                        color: Colors.grey[300],
+                                        thickness: 1,
+                                      ),
                                     ),
-                                  ),
-                                  Container(
-                                    padding: EdgeInsets.symmetric(
-                                      vertical: 20.0,
-                                    ),
-                                    child: Row(
+
+                                    // 4. GRAND TOTAL
+                                    Row(
                                       mainAxisAlignment:
                                           MainAxisAlignment.spaceBetween,
                                       children: [
-                                        Text(
-                                          'GRAND TOTAL',
+                                        const Text(
+                                          'TOTAL AKHIR',
                                           style: TextStyle(
-                                            fontSize: 20.0,
+                                            fontSize: 18.0,
                                             fontWeight: FontWeight.bold,
+                                            letterSpacing: 1.2,
                                           ),
                                         ),
                                         Text(
                                           convertIDR(
-                                            orderDetail?['total_amount'],
+                                            orderDetail?['total_amount'] ?? 0,
                                           ),
-                                          style: TextStyle(
-                                            fontSize: 22.0,
-                                            color: Colors.orange,
+                                          style: const TextStyle(
+                                            fontSize: 24.0,
+                                            color: Colors
+                                                .orange, // Tetap gunakan orange sebagai aksen utama
                                             fontWeight: FontWeight.bold,
                                           ),
                                         ),
                                       ],
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
                             ],
                           ),
@@ -972,5 +1743,149 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
         ),
       ],
     );
+  }
+
+  Widget _buildSmallBadge({required IconData icon, required String label}) {
+    return Row(
+      children: [
+        Icon(icon, size: 14, color: Colors.grey[600]),
+        const SizedBox(width: 4),
+        Text(label, style: TextStyle(fontSize: 12, color: Colors.grey[700])),
+      ],
+    );
+  }
+
+  // Helper untuk Label Method
+  String _getMethodLabel(int id) {
+    if (id == 1) return 'Takeaway';
+    if (id == 2) return 'Delivery';
+    return 'Compliment';
+  }
+
+  // Helper untuk Warna Method
+  Color _getMethodColor(int id) {
+    if (id == 1) return Colors.teal;
+    if (id == 2) return Colors.orange;
+    return Colors.purple;
+  }
+
+  Widget _buildInfoTile({
+    required IconData icon,
+    required String label,
+    required String value,
+  }) {
+    return Expanded(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.black.withOpacity(0.05)),
+            ),
+            child: Icon(icon, size: 22.0, color: Colors.blueGrey[700]),
+          ),
+          const SizedBox(width: 12.0),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 11.0,
+                    color: Colors.grey[600],
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    fontSize: 14.0,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildComplimentStatus(int? status) {
+    bool isApproved = status == 1;
+    return Center(
+      child: Column(
+        children: [
+          Icon(
+            isApproved ? Icons.check_circle : Icons.cancel,
+            color: isApproved ? Colors.green : Colors.red,
+            size: 48,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            isApproved ? 'APPROVED' : 'REJECTED',
+            style: TextStyle(
+              color: isApproved ? Colors.green : Colors.red,
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 1.2,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // --- Helper Widget 2: Payment Info Row ---
+  Widget _buildPaymentInfo(Map<String, dynamic>? detail) {
+    int total = detail?['total_amount'] ?? 0;
+    int bayar = detail?['pay_amount'] ?? 0;
+    int kembali = bayar - total;
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceAround,
+      children: [
+        _buildAmountColumn('Total Tagihan', total, Colors.black87),
+        _buildVerticalDivider(),
+        _buildAmountColumn('Total Bayar', bayar, Colors.blue),
+        _buildVerticalDivider(),
+        _buildAmountColumn('Kembali', kembali, Colors.orange[700]!),
+      ],
+    );
+  }
+
+  Widget _buildAmountColumn(String label, int amount, Color color) {
+    return Expanded(
+      child: Column(
+        children: [
+          Text(label, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+          const SizedBox(height: 4),
+          FittedBox(
+            // Mencegah teks terpotong jika angka terlalu besar
+            fit: BoxFit.scaleDown,
+            child: Text(
+              convertIDR(amount),
+              style: TextStyle(
+                fontSize: 18.0, // Sedikit diperkecil agar lebih elegan
+                color: color,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildVerticalDivider() {
+    return Container(height: 30, width: 1, color: Colors.grey[200]);
   }
 }

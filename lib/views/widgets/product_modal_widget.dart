@@ -5,13 +5,14 @@ import 'package:pos_panglima_app/services/helper/dio_client.dart';
 import 'dart:async';
 import 'package:pos_panglima_app/services/storage/shift_storage_service.dart';
 import 'package:pos_panglima_app/utils/convert.dart';
-import 'package:pos_panglima_app/utils/modal_error.dart';
-import 'package:pos_panglima_app/views/widgets/error_modal.dart';
+import 'package:pos_panglima_app/utils/modal_handling.dart';
+import 'package:pos_panglima_app/utils/modal_insufficient_stock.dart';
 
 class ProductModalWidget extends StatefulWidget {
   const ProductModalWidget({
     super.key,
     required this.title,
+    required this.category,
     required this.price,
     required this.codeProduct,
     required this.id,
@@ -19,9 +20,11 @@ class ProductModalWidget extends StatefulWidget {
     this.props,
     this.maxProduk,
     required this.onSaved,
+    required this.dialogContext,
   });
 
   final String title;
+  final String category;
   final String codeProduct;
   final int id;
   final int price;
@@ -29,6 +32,7 @@ class ProductModalWidget extends StatefulWidget {
   final List? props;
   final int? maxProduk;
   final dynamic onSaved;
+  final dynamic dialogContext;
 
   @override
   State<ProductModalWidget> createState() => _ProductModalWidgetState();
@@ -148,16 +152,46 @@ class _ProductModalWidgetState extends State<ProductModalWidget> {
 
     try {
       await cartService.postCart(payload);
-    } catch (e) {
-      showDialog(
-        context: context,
-        builder: (context) {
-          return ModalError();
-        },
-      );
-    } finally {
-      widget.onSaved();
       Navigator.of(context).pop();
+      widget.onSaved();
+    } on DioException catch (e) {
+      final String message = e.response?.data['message'] ?? 'Terjadi kesalahan';
+
+      if (message.contains('insufficient_stock')) {
+        // Ambil bagian setelah "insufficient_stock: "
+        final String stockPart = message.replaceFirst(
+          'insufficient_stock: ',
+          '',
+        );
+
+        // Pecah per item berdasarkan "; "
+        final List<String> stockItems = stockPart.split('; ');
+
+        // Ubah jadi list map yang rapi
+        final List<Map<String, String>> parsedItems = stockItems.map((item) {
+          // Contoh item: "Adonan Bakpia (ITM123): required 1.00, stock 0.00"
+          final RegExp regex = RegExp(
+            r'^(.*?): required ([\d.]+), stock ([\d.]+)$',
+          );
+          final match = regex.firstMatch(item.trim());
+          final String cleanName = (match?.group(1) ?? item).replaceAll(
+            RegExp(r'\s*\(ITM\d+\)'),
+            '',
+          );
+          return {
+            'name': cleanName,
+            'required': match?.group(2) ?? '-',
+            'stock': match?.group(3) ?? '-',
+          };
+        }).toList();
+
+        showDialog(
+          context: widget.dialogContext,
+          builder: (context) {
+            return ModalInsufficientStock(items: parsedItems);
+          },
+        );
+      }
     }
   }
 
@@ -199,6 +233,13 @@ class _ProductModalWidgetState extends State<ProductModalWidget> {
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 20,
+                          ),
+                        ),
+                        Text(
+                          widget.category,
+                          style: TextStyle(
+                            // fontWeight: FontWeight.bold,
+                            fontSize: 14,
                           ),
                         ),
                       ],
@@ -244,7 +285,6 @@ class _ProductModalWidgetState extends State<ProductModalWidget> {
                           ),
                           onPressed: () => {
                             if (hasShift == true)
-                              // if (hasShift == false)
                               {
                                 if (widget.maxProduk != null)
                                   {
@@ -260,7 +300,8 @@ class _ProductModalWidgetState extends State<ProductModalWidget> {
                                 showDialog(
                                   context: context,
                                   builder: (context) {
-                                    return ErrorModal(
+                                    return ModalHandling(
+                                      type: 'warning',
                                       title: 'Perhatian',
                                       description:
                                           'Shift belum dimulai. Mulai shift terlebih dahulu untuk melakukan transaksi.',

@@ -1,3 +1,4 @@
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:pos_panglima_app/services/auth_service.dart';
 import 'package:pos_panglima_app/services/helper/dio_client.dart';
@@ -27,37 +28,6 @@ class _LoginPageState extends State<LoginPage> {
     authService = AuthService(apiClient.dio);
   }
 
-  // Future<void> login() async {
-  //   setState(() => loading = true);
-
-  //   try {
-  //     final response = await authService.login({
-  //       "email": controllerEmail.text,
-  //       "password": controllerPw.text,
-  //     });
-
-  //     print(response.data['data']['token']);
-
-  //     final token = response.data['data']['token'];
-  //     await apiClient.saveToken(token);
-
-  //     if (!mounted) return;
-  //     showDialog(
-  //       context: context,
-  //       barrierDismissible: true,
-  //       builder: (BuildContext context) {
-  //         return const StartsiftModal();
-  //       },
-  //     );
-  //   } catch (e) {
-  //     ScaffoldMessenger.of(
-  //       context,
-  //     ).showSnackBar(const SnackBar(content: Text("Login gagal")));
-  //   }
-
-  //   setState(() => loading = false);
-  // }
-
   Future<void> login() async {
     if (!mounted) return;
 
@@ -79,7 +49,16 @@ class _LoginPageState extends State<LoginPage> {
       }
 
       final token = response.data['data']['token'];
+      final userId = response.data['data']['id'];
       await apiClient.saveToken(token);
+
+      final fcmToken = await FirebaseMessaging.instance.getToken();
+
+      await authService.postFcmToken({
+        "users_id": int.parse(userId),
+        "fcm_token": '$fcmToken',
+        "tipe": "android",
+      });
 
       if (!mounted) return;
 
@@ -91,7 +70,6 @@ class _LoginPageState extends State<LoginPage> {
       );
     } catch (e) {
       if (!mounted) return;
-
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text("Login gagal")));
@@ -107,7 +85,6 @@ class _LoginPageState extends State<LoginPage> {
     return Scaffold(
       body: SafeArea(
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(16),
           child: Container(
             width: double.infinity,
             height: double.infinity,
@@ -127,8 +104,8 @@ class _LoginPageState extends State<LoginPage> {
                   boxShadow: [
                     BoxShadow(
                       color: Colors.grey.withValues(),
-                      spreadRadius: 5,
-                      blurRadius: 7,
+                      spreadRadius: 3,
+                      blurRadius: 5,
                       offset: const Offset(0, 3),
                     ),
                   ],

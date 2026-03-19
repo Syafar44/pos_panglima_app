@@ -165,38 +165,47 @@ class BluetoothPrinterService {
       "id_ID",
     ).format(DateTime.now());
 
+    String pelanggan = 'General Pelanggan';
+
     await printLogo();
     bluetooth.printNewLine();
     bluetooth.printCustom(usersName, 1, 1);
-    bluetooth.printCustom(documentNumber, 0, 1);
-    bluetooth.printNewLine();
 
     bluetooth.printCustom('--------------------------------', 1, 0);
-    bluetooth.printCustom('Pelangan  : -', 0, 0);
-    bluetooth.printCustom('Transaksi : $date', 0, 0);
-    bluetooth.printCustom('Karyawan  : $usersName', 0, 0);
+    bluetooth.printCustom('ID Pesanan : $documentNumber', 0, 0);
+    bluetooth.printCustom('Pelangan   : $pelanggan', 0, 0);
+    bluetooth.printCustom('Transaksi  : $date', 0, 0);
     bluetooth.printCustom('--------------------------------', 1, 0);
     bluetooth.printCustom(method, 0, 1);
     bluetooth.printCustom('--------------------------------', 1, 0);
 
     listProduk.map((e) {
       bluetooth.printCustom(e['pos_menus_name'], 1, 0);
-      bluetooth.printLeftRight(
-        '  ${e['quantity']} x ${convertIDR(e['price'])}',
-        convertIDR(e['price'] * e['quantity']),
-        0,
-      );
-      final dynamic listProps = e['pos_cart_props'];
       if (isPayment) {
+        final dynamic listProps = e['pos_cart_props'];
         listProps.forEach((e) {
           bluetooth.printCustom(
-            '${e['quantity']}x ${e['pos_menus_name']}',
+            ' ${e['quantity']}x ${e['pos_menus_name']}',
             0,
             0,
           );
-          // bluetooth.printLeftRight('${e['quantity']} x pcs}', '', 0);
+        });
+      } else {
+        final dynamic listProps = e['pos_order_lines_material'];
+        listProps.forEach((e) {
+          bluetooth.printCustom(
+            '   ${e['quantity']}x ${e['items_name']}',
+            0,
+            0,
+          );
         });
       }
+      bluetooth.printLeftRight(
+        ' ${e['quantity']} x ${convertIDR(e['price'])}',
+        convertIDR(e['price'] * e['quantity']),
+        0,
+      );
+      bluetooth.printNewLine();
     }).toString();
 
     bluetooth.printCustom('--------------------------------', 1, 0);

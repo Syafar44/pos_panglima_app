@@ -6,7 +6,7 @@ import 'package:pos_panglima_app/services/helper/dio_client.dart';
 import 'package:pos_panglima_app/services/sift_service.dart';
 import 'package:pos_panglima_app/services/storage/shift_storage_service.dart';
 import 'package:pos_panglima_app/utils/convert.dart';
-import 'package:pos_panglima_app/utils/modal_error.dart';
+import 'package:pos_panglima_app/utils/modal_handling.dart';
 import 'package:pos_panglima_app/views/widgets_tree.dart';
 
 class EndsiftModal extends StatefulWidget {
@@ -53,7 +53,12 @@ class _EndsiftModalState extends State<EndsiftModal> {
       showDialog(
         context: context,
         builder: (context) {
-          return ModalError();
+          return ModalHandling(
+            type: 'warning',
+            title: 'Gagal memuat data pengguna',
+            description:
+                'Terjadi kendala saat mengambil data pengguna. Mohon periksa koneksi atau coba kembali.',
+          );
         },
       );
     }
@@ -121,7 +126,12 @@ class _EndsiftModalState extends State<EndsiftModal> {
       showDialog(
         context: context,
         builder: (context) {
-          return ModalError();
+          return ModalHandling(
+            type: 'warning',
+            title: 'Gagal mengakhiri shift',
+            description:
+                'Terjadi kendala saat mengakhiri shift. Silakan coba kembali.',
+          );
         },
       );
     }
