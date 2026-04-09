@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:blue_thermal_printer/blue_thermal_printer.dart';
@@ -15,7 +16,8 @@ import 'package:pos_panglima_app/services/network_service.dart';
 import 'package:pos_panglima_app/services/order_service.dart';
 import 'package:pos_panglima_app/services/storage/shift_storage_service.dart';
 import 'package:pos_panglima_app/utils/convert.dart';
-import 'package:pos_panglima_app/utils/modal_handling.dart';
+import 'package:pos_panglima_app/utils/loader_utils.dart';
+import 'package:pos_panglima_app/utils/snackbar_util.dart';
 import 'package:pos_panglima_app/views/components/ui/custom_checkbox.dart';
 import 'package:pos_panglima_app/views/widgets_tree.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -32,12 +34,13 @@ class _PaymentPageState extends State<PaymentPage> {
   int totalQuantity = 0;
   int totalPayment = 0;
   int subTotal = 0;
-  int dicount = 0;
+  int discount = 0;
   double fadeOpacity = 0.2;
   int selectedTab = 0;
   BluetoothDevice? connectedPrinter;
   List<BluetoothDevice> devices = [];
   bool isScanning = false;
+  StreamSubscription? _bluetoothSubscription;
   final apiClient = ApiClient();
   late final CartService cartService;
   late final AuthService authService;
@@ -72,6 +75,7 @@ class _PaymentPageState extends State<PaymentPage> {
   String selectedPaymentNonTunai = "QRIS";
   String selectedPaymentNonTunaiId = "1";
   int customAmount = 0;
+  late int finalPayment = 0;
 
   int get exactAmount => totalPayment;
   int get roundedAmount =>
@@ -81,7 +85,7 @@ class _PaymentPageState extends State<PaymentPage> {
   void initState() {
     super.initState();
 
-    BluetoothPrinterService.bluetooth.onStateChanged().listen((state) {
+    _bluetoothSubscription = BluetoothPrinterService.bluetooth.onStateChanged().listen((state) {
       setState(() {
         connectedPrinter = BluetoothPrinterService.connectedPrinter;
       });
@@ -150,12 +154,12 @@ class _PaymentPageState extends State<PaymentPage> {
         cartItems = newItems;
         totalPayment = newTotalPayment;
         subTotal = newSubtotal;
-        dicount = newDiscount;
+        discount = newDiscount;
         isLoadingCart = false;
         totalQuantity = newTotalQuantity;
       });
     } on DioException catch (e) {
-      print(e.response?.data);
+      debugPrint('loadCart error: ${e.response?.data}');
     }
   }
 
@@ -165,9 +169,12 @@ class _PaymentPageState extends State<PaymentPage> {
 
     if (!online) {
       setState(() => isLoading = false);
-      ScaffoldMessenger.of(
+      SnackbarUtil.show(
         context,
-      ).showSnackBar(const SnackBar(content: Text("Perangkat sedang offline")));
+        title: "Tidak Ada Koneksi",
+        message: "Perangkat sedang offline, periksa koneksi internet Anda",
+        status: SnackBarStatus.warning,
+      );
       return;
     }
 
@@ -176,7 +183,7 @@ class _PaymentPageState extends State<PaymentPage> {
     try {
       if (selectedMethodName != 'Compliment') {
         if (selectedTab == 0) {
-          int finalPayment = totalPayment;
+          finalPayment = totalPayment;
 
           if (selectedPayment == 'rounded') {
             finalPayment = roundedAmount;
@@ -237,7 +244,6 @@ class _PaymentPageState extends State<PaymentPage> {
           };
 
           final response = await orderService.postOrder(payloadOrder);
-          print('======================= $response');
           orderId = response.data['data']['id'];
           String documentNumber = response.data['data']['document_number'];
 
@@ -319,30 +325,48 @@ class _PaymentPageState extends State<PaymentPage> {
 
       await clearVouchers();
 
-      paymentSuccessModal();
+      await cameraService.dispose();
+
+      int kembalian = 0;
+
+      if (selectedTab == 0) {
+        final int yangHarusDibayar = totalPayment - nominalVoucher;
+
+        if (selectedPayment == 'exact') {
+          kembalian = 0;
+        } else if (selectedPayment == 'rounded') {
+          kembalian = roundedAmount - yangHarusDibayar;
+        } else if (selectedPayment == 'custom') {
+          kembalian = customAmount - yangHarusDibayar;
+        }
+
+        if (kembalian < 0) kembalian = 0;
+      }
+
+      paymentSuccessModal(kembalian);
 
       if (!mounted) return;
 
-      await Future.delayed(const Duration(seconds: 3));
-
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (_) => WidgetTree()),
-        (route) => false,
-      );
+      if (kembalian == 0) {
+        await Future.delayed(const Duration(seconds: 5));
+        if (!mounted) return;
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => WidgetTree()),
+          (route) => false,
+        );
+      }
     } on DioException catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text("Terjadi kesalahan: $e")));
       final String message =
           e.response?.data?['message'] ?? 'Terjadi kesalahan';
-      print(message);
-      // tandai
+      SnackbarUtil.show(
+        context,
+        title: "Terjadi Kesalahan",
+        message: message,
+        status: SnackBarStatus.error,
+      );
       paymentErrorModal();
-    } finally {
-      setState(() => isLoading = false);
-      await cameraService.dispose();
     }
   }
 
@@ -377,7 +401,7 @@ class _PaymentPageState extends State<PaymentPage> {
       );
       setState(() => isLoadingMethod = false);
     } catch (e) {
-      print("Error fetching methods: $e");
+      debugPrint("Error fetching methods: $e");
     }
   }
 
@@ -392,70 +416,119 @@ class _PaymentPageState extends State<PaymentPage> {
     return await showDialog<bool>(
           context: context,
           barrierDismissible: false,
-          builder: (_) {
+          builder: (context) {
             return AlertDialog(
               backgroundColor: Colors.white,
-              title: Column(
-                spacing: 10.0,
+              surfaceTintColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+              titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+              contentPadding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+              title: Row(
                 children: [
-                  Text(
+                  Icon(Icons.note_add_rounded, color: Colors.amber.shade900),
+                  const SizedBox(width: 12),
+                  const Text(
                     "Keterangan Compliment",
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  Text(
-                    "Berikan penjelasan atau catatan terkait compliment yang dilakukan (contoh: permintaan pak Agung, dll).",
-                    style: TextStyle(fontSize: 16),
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
                   ),
                 ],
               ),
               content: SingleChildScrollView(
-                child: SizedBox(
-                  width: 600.0,
-                  child: Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: TextField(
-                      controller: _keteranganCompliment,
-                      onChanged: (value) {
-                        setState(() {});
-                      },
-                      decoration: InputDecoration(
-                        labelText: "Berikan Keterangan",
-                        border: const OutlineInputBorder(),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "Berikan penjelasan atau catatan terkait compliment ini. Bagian ini wajib diisi.",
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey.shade600,
+                        height: 1.4,
                       ),
                     ),
-                  ),
+                    const SizedBox(height: 20),
+                    TextField(
+                      controller: _keteranganCompliment,
+                      maxLines: 3,
+                      autofocus: true,
+                      decoration: InputDecoration(
+                        hintText: "Contoh: Permintaan Pak Agung, dll.",
+                        hintStyle: TextStyle(
+                          color: Colors.grey.shade400,
+                          fontSize: 14,
+                        ),
+                        labelText: "Detail Keterangan *",
+                        labelStyle: const TextStyle(
+                          color: Colors.amber,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        alignLabelWithHint: true,
+                        filled: true,
+                        fillColor: Colors.grey.shade50,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: Colors.grey.shade300),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: Colors.grey.shade300),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(
+                            color: Colors.amber,
+                            width: 2,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
+              actionsPadding: const EdgeInsets.fromLTRB(0, 0, 16, 16),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context, false),
-                  child: Text("Batal", style: TextStyle(color: Colors.black)),
+                  style: TextButton.styleFrom(
+                    foregroundColor: Colors.grey.shade700,
+                  ),
+                  child: const Text(
+                    "Batal",
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
                 ),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.amber,
+                    foregroundColor: Colors.black87,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 12,
+                    ),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14.0),
+                      borderRadius: BorderRadius.circular(12.0),
                     ),
                   ),
                   onPressed: () {
-                    bool allValid = true;
+                    final text = _keteranganCompliment.text.trim();
 
-                    final controller = _keteranganCompliment;
-                    if (controller == null || controller.text.isEmpty) {
-                      allValid = false;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text("Keterangan Wajib Di isi")),
+                    if (text.isEmpty) {
+                      SnackbarUtil.show(
+                        context,
+                        title: "Input Wajib",
+                        message: "Silakan isi keterangan terlebih dahulu",
+                        status: SnackBarStatus.warning,
                       );
-                    }
-
-                    if (allValid) {
+                    } else {
                       Navigator.pop(context, true);
                     }
                   },
-                  child: Text(
+                  child: const Text(
                     "Lanjutkan",
-                    style: TextStyle(color: Colors.black),
+                    style: TextStyle(fontWeight: FontWeight.bold),
                   ),
                 ),
               ],
@@ -541,7 +614,7 @@ class _PaymentPageState extends State<PaymentPage> {
     );
   }
 
-  Future<void> paymentSuccessModal() async {
+  Future<void> paymentSuccessModal(int kembalian) async {
     showDialog(
       context: context,
       builder: (context) {
@@ -589,6 +662,45 @@ class _PaymentPageState extends State<PaymentPage> {
               ),
               const SizedBox(height: 24),
 
+              if (kembalian > 0) ...[
+                const SizedBox(height: 16),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 14,
+                    horizontal: 16,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.green.shade50,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.green.shade200),
+                  ),
+                  child: Column(
+                    children: [
+                      Text(
+                        'Kembalian',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.green.shade700,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        convertIDR(kembalian),
+                        style: TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.w900,
+                          color: Colors.green.shade700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+
+              SizedBox(height: 24),
+
               // 4. Tombol Aksi
               SizedBox(
                 width: double.infinity, // Membuat tombol menjadi full-width
@@ -603,7 +715,11 @@ class _PaymentPageState extends State<PaymentPage> {
                     elevation: 0,
                   ),
                   onPressed: () {
-                    Navigator.of(context).pop();
+                    Navigator.pushAndRemoveUntil(
+                      context,
+                      MaterialPageRoute(builder: (_) => WidgetTree()),
+                      (route) => false,
+                    );
                   },
                   child: const Text(
                     'Selesai',
@@ -791,9 +907,9 @@ class _PaymentPageState extends State<PaymentPage> {
 
       await saveVoucherToLocal(newBarcode, nominal);
       await getVoucherData();
-      print(response);
+      debugPrint('postLampiran response: $response');
     } on DioException catch (e) {
-      print(e.response);
+      debugPrint('postLampiran DioException: ${e.response}');
     }
   }
 
@@ -808,7 +924,6 @@ class _PaymentPageState extends State<PaymentPage> {
 
     // Cek apakah barcode sudah ada (mencegah double)
     if (localBarcodes.contains(newBarcode)) {
-      print('Voucher sudah digunakan');
       voucherErrorModal();
       return;
     } else {
@@ -822,9 +937,6 @@ class _PaymentPageState extends State<PaymentPage> {
     // Tambahkan nominal
     final int currentNominal = prefs.getInt('voucher_nominal') ?? 0;
     await prefs.setInt('voucher_nominal', currentNominal + nominal);
-
-    print('Barcode list: $localBarcodes');
-    print('Total nominal: ${currentNominal + nominal}');
   }
 
   Future<void> getVoucherData() async {
@@ -836,15 +948,14 @@ class _PaymentPageState extends State<PaymentPage> {
         : [];
     final int totalNominal = prefs.getInt('voucher_nominal') ?? 0;
 
-    print('Barcodes: $barcodeList');
-    print('Total Nominal: $totalNominal');
+    debugPrint('Barcodes: $barcodeList');
+    debugPrint('Total Nominal: $totalNominal');
     setState(() {
       barcodeList = newBarcodeList;
       nominalVoucher = totalNominal;
     });
   }
 
-  // Reset semua voucher (misal setelah order selesai)
   Future<void> clearVouchers() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('voucher_barcodes');
@@ -857,6 +968,7 @@ class _PaymentPageState extends State<PaymentPage> {
 
   @override
   void dispose() {
+    _bluetoothSubscription?.cancel();
     _customAmountController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -878,7 +990,21 @@ class _PaymentPageState extends State<PaymentPage> {
         ),
       ),
       body: isLoadingCart || isLoadingMethod || isLoadingUserId
-          ? Center(child: CircularProgressIndicator())
+          ? Center(
+              child: ModernLoading(
+                timeout: const Duration(seconds: 10),
+                onRetry: () {
+                  setState(() {
+                    isLoadingCart = true;
+                    isLoadingMethod = true;
+                    isLoadingUserId = true;
+                  });
+                  loadCart();
+                  _methods();
+                  getProfile();
+                },
+              ),
+            )
           : Row(
               children: [
                 Expanded(
@@ -891,132 +1017,194 @@ class _PaymentPageState extends State<PaymentPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        // Container(
+                        //   padding: EdgeInsets.all(10),
+                        //   color: Colors.black12,
+                        //   width: double.infinity,
+                        //   child: Text('Total Produk ( $totalQuantity )'),
+                        // ),
                         Container(
-                          padding: EdgeInsets.all(10),
-                          color: Colors.black12,
-                          width: double.infinity,
-                          child: Text('Total Produk ( $totalQuantity )'),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors
+                                .grey[50], // Abu-abu sangat muda agar tidak "mati"
+                            border: Border(
+                              bottom: BorderSide(
+                                color: Colors.grey.withOpacity(0.2),
+                              ),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.shopping_bag_outlined,
+                                size: 18,
+                                color: Colors.grey[600],
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Ringkasan Pesanan ( $totalQuantity Produk )',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.grey[700],
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
+
                         Expanded(
                           child: Stack(
                             children: [
-                              SingleChildScrollView(
+                              ListView.separated(
+                                // Lebih efisien daripada SingleChildScrollView + Column
                                 controller: _scrollController,
-                                child: Column(
-                                  children: cartItems.map((e) {
-                                    return Container(
-                                      padding: EdgeInsets.all(14.0),
-                                      decoration: BoxDecoration(
-                                        border: Border(
-                                          bottom: BorderSide(
-                                            color: Colors.black26,
-                                          ),
-                                        ),
+                                padding: const EdgeInsets.all(16),
+                                itemCount: cartItems.length,
+                                separatorBuilder: (context, index) =>
+                                    const SizedBox(height: 12),
+                                itemBuilder: (context, index) {
+                                  final e = cartItems[index];
+                                  return Container(
+                                    padding: const EdgeInsets.all(16),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: Colors.grey.withOpacity(0.3),
                                       ),
-                                      child: Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.spaceBetween,
-                                        children: [
-                                          Column(
+                                    ),
+                                    child: Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        // Info Produk
+                                        Expanded(
+                                          child: Column(
                                             crossAxisAlignment:
                                                 CrossAxisAlignment.start,
                                             children: [
                                               Text(
                                                 e['pos_menus_name'],
-                                                style: TextStyle(
+                                                style: const TextStyle(
                                                   fontWeight: FontWeight.bold,
-                                                  fontSize: 16,
+                                                  fontSize: 15,
                                                 ),
                                               ),
-                                              if (e['max_qty'] != 0 &&
-                                                  e['pos_cart_props'] != null)
-                                                Column(
-                                                  crossAxisAlignment:
-                                                      CrossAxisAlignment.start,
-                                                  children:
-                                                      (e['pos_cart_props']
-                                                              as List)
-                                                          .where(
-                                                            (item) =>
-                                                                item['quantity'] !=
-                                                                0,
-                                                          )
-                                                          .map<Widget>((item) {
-                                                            return Text(
-                                                              '${item['quantity']}x ${item['pos_menus_name']}',
-                                                            );
-                                                          })
-                                                          .toList(),
-                                                ),
-                                              if (e['max_qty'] != 0 &&
-                                                  e['pos_cart_materials'] !=
-                                                      null)
-                                                Column(
-                                                  crossAxisAlignment:
-                                                      CrossAxisAlignment.start,
-                                                  children:
-                                                      (e['pos_cart_materials']
-                                                              as List)
-                                                          .where(
-                                                            (item) =>
-                                                                item['quantity'] !=
-                                                                0,
-                                                          )
-                                                          .map<Widget>((item) {
-                                                            return Text(
-                                                              '${item['quantity']}x ${item['items_name']}',
-                                                            );
-                                                          })
-                                                          .toList(),
-                                                ),
+
+                                              // Render Add-ons / Materials dengan style yang lebih soft
+                                              if (e['pos_cart_props'] != null)
+                                                ...((e['pos_cart_props']
+                                                        as List)
+                                                    .where(
+                                                      (item) =>
+                                                          item['quantity'] != 0,
+                                                    )
+                                                    .map(
+                                                      (item) => Padding(
+                                                        padding:
+                                                            const EdgeInsets.only(
+                                                              top: 4,
+                                                            ),
+                                                        child: Text(
+                                                          '• ${item['quantity']}x ${item['pos_menus_name']}',
+                                                          style: TextStyle(
+                                                            fontSize: 12,
+                                                            color: Colors
+                                                                .grey[600],
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    )),
+
+                                              const SizedBox(height: 8),
+
+                                              // Harga & Diskon
                                               Row(
                                                 children: [
                                                   Text(
-                                                    convertIDR((e['total'])),
+                                                    convertIDR(e['total']),
+                                                    style: const TextStyle(
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                    ),
                                                   ),
-                                                  (e['discount'] ?? 0) +
-                                                              (e['discount_val'] ??
-                                                                  0) !=
-                                                          0
-                                                      ? Text(
-                                                          ' ( - ${convertIDR(e['subtotal'] - e['total'])} )',
-                                                        )
-                                                      : SizedBox(),
+                                                  if ((e['discount'] ?? 0) +
+                                                          (e['discount_val'] ??
+                                                              0) !=
+                                                      0)
+                                                    Padding(
+                                                      padding:
+                                                          const EdgeInsets.only(
+                                                            left: 8.0,
+                                                          ),
+                                                      child: Text(
+                                                        '-${convertIDR(e['subtotal'] - e['total'])}',
+                                                        style: const TextStyle(
+                                                          color: Colors.red,
+                                                          fontSize: 12,
+                                                          decoration:
+                                                              TextDecoration
+                                                                  .lineThrough,
+                                                        ),
+                                                      ),
+                                                    ),
                                                 ],
                                               ),
                                             ],
                                           ),
-                                          Text(
-                                            '${e['quantity']} PCS',
-                                            style: TextStyle(
-                                              color: Colors.orange,
-                                              fontWeight: FontWeight.bold,
+                                        ),
+
+                                        // Quantity Badge
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 10,
+                                            vertical: 6,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: Colors.amber[50],
+                                            borderRadius: BorderRadius.circular(
+                                              8,
                                             ),
                                           ),
-                                        ],
-                                      ),
-                                    );
-                                  }).toList(),
-                                ),
+                                          child: Text(
+                                            '${e['quantity']} PCS',
+                                            style: const TextStyle(
+                                              color: Colors.orange,
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                },
                               ),
+
+                              // 3. Bottom Fade Overlay (Visual Guide for Scrolling)
                               Positioned(
                                 bottom: 0,
                                 left: 0,
                                 right: 0,
                                 child: IgnorePointer(
                                   child: AnimatedOpacity(
-                                    duration: Duration(milliseconds: 300),
+                                    duration: const Duration(milliseconds: 300),
                                     opacity: fadeOpacity,
                                     child: Container(
-                                      height: 40,
+                                      height: 60,
                                       decoration: BoxDecoration(
                                         gradient: LinearGradient(
                                           begin: Alignment.topCenter,
                                           end: Alignment.bottomCenter,
                                           colors: [
-                                            // ignore: deprecated_member_use
-                                            Colors.black26.withOpacity(0),
-                                            Colors.black26,
+                                            Colors.black.withOpacity(0),
+                                            Colors.black.withOpacity(0.1),
+                                            Colors.black12,
                                           ],
                                         ),
                                       ),
@@ -1027,165 +1215,189 @@ class _PaymentPageState extends State<PaymentPage> {
                             ],
                           ),
                         ),
+
                         Column(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 14.0,
-                                vertical: 8.0,
-                              ),
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: SizedBox(
-                                      height: 40,
-                                      child: TextField(
-                                        controller: _voucherController,
-                                        focusNode: _voucherFocusNode,
-                                        decoration: InputDecoration(
-                                          hintText: 'Kode voucher...',
-                                          contentPadding: EdgeInsets.symmetric(
-                                            horizontal: 12,
-                                          ),
-                                          border: OutlineInputBorder(
-                                            borderRadius: BorderRadius.circular(
-                                              8,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
+                            // 1. Voucher Input Section
+                            // Container(
+                            //   padding: const EdgeInsets.fromLTRB(
+                            //     16,
+                            //     12,
+                            //     16,
+                            //     16,
+                            //   ),
+                            //   decoration: BoxDecoration(
+                            //     color: Colors.white,
+                            //     border: Border(
+                            //       top: BorderSide(
+                            //         color: Colors.grey.withOpacity(0.1),
+                            //       ),
+                            //     ),
+                            //   ),
+                            //   child: Row(
+                            //     children: [
+                            //       Expanded(
+                            //         child: SizedBox(
+                            //           height:
+                            //               42, // Tinggi sedikit dinaikkan agar lebih touch-friendly
+                            //           child: TextField(
+                            //             controller: _voucherController,
+                            //             focusNode: _voucherFocusNode,
+                            //             decoration: InputDecoration(
+                            //               hintText: 'Punya kode voucher?',
+                            //               hintStyle: TextStyle(
+                            //                 fontSize: 14,
+                            //                 color: Colors.grey[400],
+                            //               ),
+                            //               prefixIcon: const Icon(
+                            //                 Icons.confirmation_number_outlined,
+                            //                 size: 20,
+                            //               ),
+                            //               contentPadding:
+                            //                   const EdgeInsets.symmetric(
+                            //                     horizontal: 16,
+                            //                   ),
+                            //               filled: true,
+                            //               fillColor: Colors.grey[50],
+                            //               enabledBorder: OutlineInputBorder(
+                            //                 borderRadius: BorderRadius.circular(
+                            //                   10,
+                            //                 ),
+                            //                 borderSide: BorderSide(
+                            //                   color: Colors.grey.withOpacity(
+                            //                     0.2,
+                            //                   ),
+                            //                 ),
+                            //               ),
+                            //               focusedBorder: OutlineInputBorder(
+                            //                 borderRadius: BorderRadius.circular(
+                            //                   10,
+                            //                 ),
+                            //                 borderSide: const BorderSide(
+                            //                   color: Colors.amber,
+                            //                   width: 1.5,
+                            //                 ),
+                            //               ),
+                            //             ),
+                            //           ),
+                            //         ),
+                            //       ),
+                            //       const SizedBox(width: 12),
+                            //       SizedBox(
+                            //         height: 42,
+                            //         child: ElevatedButton(
+                            //           onPressed: () async {
+                            //             _voucherFocusNode.unfocus();
+                            //             await checkVoucher();
+                            //           },
+                            //           style: ElevatedButton.styleFrom(
+                            //             backgroundColor: Colors.black87,
+                            //             foregroundColor: Colors.amber,
+                            //             elevation: 0,
+                            //             shape: RoundedRectangleBorder(
+                            //               borderRadius: BorderRadius.circular(
+                            //                 10,
+                            //               ),
+                            //             ),
+                            //           ),
+                            //           child: const Text(
+                            //             'Cek',
+                            //             style: TextStyle(
+                            //               fontWeight: FontWeight.bold,
+                            //             ),
+                            //           ),
+                            //         ),
+                            //       ),
+                            //     ],
+                            //   ),
+                            // ),
+
+                            // 2. Billing Details Section
+                            if (MediaQuery.of(context).viewInsets.bottom == 0)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 16,
+                                  horizontal: 20,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: const BorderRadius.vertical(
+                                    top: Radius.circular(20),
                                   ),
-                                  SizedBox(width: 10),
-                                  ElevatedButton(
-                                    onPressed: () async {
-                                      _voucherFocusNode.unfocus();
-                                      await checkVoucher();
-                                    },
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.black38,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.05),
+                                      blurRadius: 10,
+                                      offset: const Offset(0, -5),
+                                    ),
+                                  ],
+                                ),
+                                child: Column(
+                                  children: [
+                                    // Subtotal Row
+                                    _buildSummaryRow(
+                                      'Subtotal',
+                                      convertIDR(subTotal),
+                                      isBold: false,
+                                    ),
+
+                                    // Discount Row (Conditional)
+                                    if (discount > 0) ...[
+                                      const SizedBox(height: 8),
+                                      _buildSummaryRow(
+                                        'Diskon Produk',
+                                        '- ${convertIDR(discount)}',
+                                        textColor: Colors.red[600],
+                                      ),
+                                    ],
+
+                                    // Voucher Row (Conditional)
+                                    if (nominalVoucher > 0) ...[
+                                      const SizedBox(height: 8),
+                                      _buildSummaryRow(
+                                        'Diskon Voucher',
+                                        '- ${convertIDR(nominalVoucher)}',
+                                        textColor: Colors.red[600],
+                                      ),
+                                    ],
+
+                                    const Padding(
                                       padding: EdgeInsets.symmetric(
-                                        horizontal: 20,
                                         vertical: 10,
                                       ),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
+                                      child: Divider(height: 1, thickness: 1),
                                     ),
-                                    child: Text(
-                                      'Check',
-                                      style: TextStyle(
-                                        color: Colors.amber,
-                                        fontWeight: FontWeight.bold,
-                                      ),
+
+                                    // Total Payment Row
+                                    Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        const Text(
+                                          'Total Bayar',
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                        Text(
+                                          convertIDR(
+                                            totalPayment - nominalVoucher,
+                                          ),
+                                          style: const TextStyle(
+                                            fontSize:
+                                                22, // Menonjolkan angka utama
+                                            fontWeight: FontWeight.w900,
+                                            color: Colors
+                                                .amber, // Menggunakan warna tema brand
+                                          ),
+                                        ),
+                                      ],
                                     ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            Container(
-                              decoration: BoxDecoration(
-                                border: Border(
-                                  top: BorderSide(color: Colors.black26),
+                                  ],
                                 ),
                               ),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 14.0,
-                                vertical: 10.0,
-                              ),
-                              child: Column(
-                                children: [
-                                  // Baris Subtotal
-                                  Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Text(
-                                        'Subtotal',
-                                        style: TextStyle(
-                                          fontSize: 14,
-                                          color: Colors.grey[700],
-                                        ),
-                                      ),
-                                      Text(
-                                        convertIDR(subTotal),
-                                        style: TextStyle(fontSize: 14),
-                                      ),
-                                    ],
-                                  ),
-                                  SizedBox(height: 3),
-                                  if (dicount > 0)
-                                    Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Text(
-                                          'Diskon',
-                                          style: TextStyle(
-                                            fontSize: 14,
-                                            color: Colors.red,
-                                          ),
-                                        ),
-                                        Text(
-                                          '- ${convertIDR(dicount)}',
-                                          style: TextStyle(
-                                            fontSize: 14,
-                                            color: Colors.red,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  SizedBox(height: 3),
-                                  if (nominalVoucher > 0)
-                                    Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Text(
-                                          'Diskon Voucher',
-                                          style: TextStyle(
-                                            fontSize: 14,
-                                            color: Colors.red,
-                                          ),
-                                        ),
-                                        Text(
-                                          '- ${convertIDR(nominalVoucher)}',
-                                          style: TextStyle(
-                                            fontSize: 14,
-                                            color: Colors.red,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  SizedBox(height: 5),
-                                  Divider(color: Colors.black12, height: 1),
-                                  SizedBox(height: 5),
-                                  Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Text(
-                                        'Total Pembayaran',
-                                        style: TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                      Text(
-                                        convertIDR(
-                                          totalPayment - nominalVoucher,
-                                        ), // Variabel total akhir
-                                        style: TextStyle(
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.orange,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
                           ],
                         ),
                       ],
@@ -1211,14 +1423,15 @@ class _PaymentPageState extends State<PaymentPage> {
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 16,
+                                color: Colors.black45,
                               ),
                             ),
                             Text(
                               convertIDR(totalPayment - nominalVoucher),
                               style: TextStyle(
                                 fontWeight: FontWeight.w900,
-                                color: Colors.orange,
-                                fontSize: 24.0,
+                                color: Colors.black,
+                                fontSize: 30.0,
                               ),
                             ),
                           ],
@@ -1226,68 +1439,8 @@ class _PaymentPageState extends State<PaymentPage> {
                       ),
                       Row(
                         children: [
-                          Expanded(
-                            child: GestureDetector(
-                              onTap: () {
-                                setState(() => selectedTab = 0);
-                              },
-                              child: Container(
-                                padding: EdgeInsets.symmetric(vertical: 10),
-                                decoration: BoxDecoration(
-                                  border: Border(
-                                    bottom: BorderSide(
-                                      color: selectedTab == 0
-                                          ? Colors.orange
-                                          : Colors.transparent,
-                                      width: 3,
-                                    ),
-                                  ),
-                                ),
-                                alignment: Alignment.center,
-                                child: Text(
-                                  "Tunai",
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
-                                    color: selectedTab == 0
-                                        ? Colors.orange
-                                        : Colors.grey,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                          Expanded(
-                            child: GestureDetector(
-                              onTap: () {
-                                setState(() => selectedTab = 1);
-                              },
-                              child: Container(
-                                padding: EdgeInsets.symmetric(vertical: 10),
-                                decoration: BoxDecoration(
-                                  border: Border(
-                                    bottom: BorderSide(
-                                      color: selectedTab == 1
-                                          ? Colors.orange
-                                          : Colors.transparent,
-                                      width: 3,
-                                    ),
-                                  ),
-                                ),
-                                alignment: Alignment.center,
-                                child: Text(
-                                  "Non Tunai",
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
-                                    color: selectedTab == 1
-                                        ? Colors.orange
-                                        : Colors.grey,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
+                          _buildTabItem(index: 0, title: "Tunai"),
+                          _buildTabItem(index: 1, title: "Non Tunai"),
                         ],
                       ),
                       Expanded(
@@ -1304,31 +1457,51 @@ class _PaymentPageState extends State<PaymentPage> {
                         Container(
                           width: double.infinity,
                           padding: const EdgeInsets.all(20.0),
-                          child: ElevatedButton(
-                            onPressed: isLoading ? null : handlePayment,
-                            style: IconButton.styleFrom(
-                              backgroundColor: Colors.amber.shade500,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(6),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.03),
+                                blurRadius: 10,
+                                offset: const Offset(0, -5),
                               ),
+                            ],
+                          ),
+                          child: SizedBox(
+                            height:
+                                45, // Memberikan tinggi yang konsisten agar mudah ditekan (touch-friendly)
+                            child: ElevatedButton(
+                              onPressed: isLoading ? null : handlePayment,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.amber.shade500,
+                                disabledBackgroundColor: Colors
+                                    .grey
+                                    .shade300, // Warna saat loading/disable
+                                elevation:
+                                    0, // Flat design lebih modern untuk POS
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(
+                                    12,
+                                  ), // Border radius sedikit lebih lembut
+                                ),
+                              ),
+                              child: isLoading
+                                  ? ModernLoading(
+                                      size: 24,
+                                      strokeWidth: 3,
+                                      timeout: const Duration(seconds: 10),
+                                      onRetry: () {},
+                                    )
+                                  : const Text(
+                                      'Selesaikan Pembayaran',
+                                      style: TextStyle(
+                                        fontSize: 16.0,
+                                        color: Colors.black87,
+                                        fontWeight: FontWeight.bold,
+                                        letterSpacing: 0.5,
+                                      ),
+                                    ),
                             ),
-                            child: isLoading
-                                ? SizedBox(
-                                    width: 20,
-                                    height: 20,
-                                    child: CircularProgressIndicator(
-                                      color: Colors.black,
-                                      strokeWidth: 2.5,
-                                    ),
-                                  )
-                                : Text(
-                                    'Selesaikan Pembayaran',
-                                    style: TextStyle(
-                                      fontSize: 16.0,
-                                      color: Colors.black87,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
                           ),
                         ),
                     ],
@@ -1455,6 +1628,69 @@ class _PaymentPageState extends State<PaymentPage> {
           },
         );
       }).toList(),
+    );
+  }
+
+  Widget _buildSummaryRow(
+    String label,
+    String value, {
+    Color? textColor,
+    bool isBold = false,
+  }) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 14,
+            color: textColor ?? Colors.grey[600],
+            fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
+          ),
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 14,
+            color: textColor ?? Colors.black87,
+            fontWeight: isBold ? FontWeight.bold : FontWeight.w500,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTabItem({required int index, required String title}) {
+    bool isSelected = selectedTab == index;
+
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => selectedTab = index),
+        behavior: HitTestBehavior.opaque, // Memastikan area klik luas
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 250), // Animasi transisi warna
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(
+                color: isSelected
+                    ? Colors.orange
+                    : Colors.grey.withOpacity(0.1),
+                width: 3,
+              ),
+            ),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            title,
+            style: TextStyle(
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+              fontSize: 16,
+              color: isSelected ? Colors.orange : Colors.grey[500],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

@@ -7,6 +7,7 @@ import 'package:pos_panglima_app/utils/convert.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show rootBundle, ByteData, Uint8List;
 
 class BluetoothPrinterService {
@@ -65,7 +66,7 @@ class BluetoothPrinterService {
         },
       );
     } catch (e) {
-      print("Connect error: $e");
+      debugPrint("Connect error: $e");
       connectedPrinter = null;
       return false;
     }
@@ -81,19 +82,19 @@ class BluetoothPrinterService {
 
     for (int i = 0; i < retries; i++) {
       try {
-        print("Mencoba reconnect (${i + 1}/$retries)...");
+        debugPrint("Mencoba reconnect (${i + 1}/$retries)...");
         bool ok = await connect(lastConnectedPrinter!);
         if (ok) {
-          print("Auto-reconnect berhasil ke ${lastConnectedPrinter!.name}");
+          debugPrint("Auto-reconnect berhasil ke ${lastConnectedPrinter!.name}");
           return;
         }
       } catch (e) {
-        print("Retry reconnect error: $e");
+        debugPrint("Retry reconnect error: $e");
       }
       await Future.delayed(const Duration(seconds: 2));
     }
 
-    print("Auto-reconnect gagal setelah $retries percobaan");
+    debugPrint("Auto-reconnect gagal setelah $retries percobaan");
   }
 
   static Future<void> _saveLastPrinter(BluetoothDevice device) async {
@@ -107,7 +108,7 @@ class BluetoothPrinterService {
     final address = prefs.getString('last_printer_address');
 
     if (address == null || address.isEmpty) {
-      print("Tidak ada printer terakhir yang tersimpan.");
+      debugPrint("Tidak ada printer terakhir yang tersimpan.");
       return;
     }
 
@@ -119,12 +120,12 @@ class BluetoothPrinterService {
         .firstOrNull;
 
     if (device == null) {
-      print("Printer terakhir tidak ditemukan di bonded devices.");
+      debugPrint("Printer terakhir tidak ditemukan di bonded devices.");
       return;
     }
 
     lastConnectedPrinter = device;
-    print("Printer terakhir ditemukan: ${device.name}, mencoba reconnect...");
+    debugPrint("Printer terakhir ditemukan: ${device.name}, mencoba reconnect...");
 
     _autoReconnect();
   }
@@ -156,7 +157,7 @@ class BluetoothPrinterService {
     await initializeDateFormatting('id_ID', null);
 
     if (isConn != true) {
-      print("Printer belum terhubung!");
+      debugPrint("Printer belum terhubung!");
       return;
     }
 

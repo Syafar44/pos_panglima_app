@@ -46,138 +46,6 @@ class _DrawerWidgetState extends State<DrawerWidget> {
 
   @override
   Widget build(BuildContext context) {
-    // return Drawer(
-    //   child: Column(
-    //     children: [
-    //       SizedBox(
-    //         height: 100,
-    //         child: DrawerHeader(
-    //           margin: EdgeInsets.zero,
-    //           child: Row(
-    //             children: [
-    //               Image(
-    //                 image: const AssetImage('assets/images/logo.png'),
-    //                 fit: BoxFit.fill,
-    //                 width: 80.0,
-    //                 gaplessPlayback: true,
-    //                 frameBuilder:
-    //                     (context, child, frame, wasSynchronouslyLoaded) {
-    //                       // Jika sudah di-cache, langsung tampil tanpa animasi
-    //                       if (wasSynchronouslyLoaded) return child;
-    //                       return AnimatedOpacity(
-    //                         opacity: frame == null ? 0 : 1,
-    //                         duration: const Duration(milliseconds: 150),
-    //                         child: child,
-    //                       );
-    //                     },
-    //               ),
-    //               SizedBox(width: 14.0),
-    //               Column(
-    //                 crossAxisAlignment: CrossAxisAlignment.start,
-    //                 mainAxisAlignment: MainAxisAlignment.center,
-    //                 children: [
-    //                   Text(
-    //                     "POS Panglima",
-    //                     style: TextStyle(
-    //                       fontSize: 17.0,
-    //                       fontWeight: FontWeight.bold,
-    //                     ),
-    //                   ),
-    //                   Text("Version 1.0.0"),
-    //                 ],
-    //               ),
-    //             ],
-    //           ),
-    //         ),
-    //       ),
-    //       Expanded(
-    //         child: ListView.builder(
-    //           padding: EdgeInsets.zero,
-    //           itemCount: list.length,
-    //           itemBuilder: (context, index) {
-    //             final isSelected = widget.value == index;
-    //             return ListTile(
-    //               selected: isSelected,
-    //               selectedTileColor: Colors.amber[200],
-    //               selectedColor: Colors.black,
-    //               leading: list[index]['icon'],
-    //               title: Text(
-    //                 list[index]['label'],
-    //                 style: TextStyle(
-    //                   color: Colors.black87,
-    //                   fontWeight: isSelected
-    //                       ? FontWeight.bold
-    //                       : FontWeight.normal,
-    //                 ),
-    //               ),
-    //               onTap: () {
-    //                 Navigator.pop(context);
-    //                 selectedPageNotifier.value = index;
-    //               },
-    //             );
-    //           },
-    //         ),
-    //       ),
-    //       Padding(
-    //         padding: const EdgeInsets.symmetric(
-    //           vertical: 16.0,
-    //           horizontal: 20.0,
-    //         ),
-    //         child: SizedBox(
-    //           width: double.infinity,
-    //           child: hasShift == false
-    //               ? FilledButton(
-    //                   style: FilledButton.styleFrom(
-    //                     backgroundColor: Colors.amber,
-    //                     padding: EdgeInsets.symmetric(
-    //                       horizontal: 22,
-    //                       vertical: 14,
-    //                     ),
-    //                     shape: RoundedRectangleBorder(
-    //                       borderRadius: BorderRadius.circular(12),
-    //                     ),
-    //                   ),
-    //                   onPressed: () {
-    //                     Navigator.push(
-    //                       context,
-    //                       MaterialPageRoute(
-    //                         builder: (context) => LoginPage(title: 'Login'),
-    //                       ),
-    //                     );
-    //                   },
-    //                   child: Text(
-    //                     'Mulai Shift',
-    //                     style: TextStyle(color: Colors.black),
-    //                   ),
-    //                 )
-    //               : FilledButton(
-    //                   style: FilledButton.styleFrom(
-    //                     backgroundColor: Colors.amber,
-    //                     padding: EdgeInsets.symmetric(
-    //                       horizontal: 22,
-    //                       vertical: 14,
-    //                     ),
-    //                     shape: RoundedRectangleBorder(
-    //                       borderRadius: BorderRadius.circular(12),
-    //                     ),
-    //                   ),
-    //                   onPressed: () {
-    //                     showDialog(
-    //                       context: context,
-    //                       barrierDismissible: true,
-    //                       builder: (context) => const EndsiftModal(),
-    //                     );
-    //                   },
-    //                   child: Text(
-    //                     'Akhiri Shift',
-    //                     style: TextStyle(color: Colors.black),
-    //                   ),
-    //                 ),
-    //         ),
-    //       ),
-    //     ],
-    //   ),
-    // );
     return Drawer(
       backgroundColor: Colors.white,
       child: Column(
@@ -305,16 +173,16 @@ class _DrawerWidgetState extends State<DrawerWidget> {
               child: FilledButton(
                 style: FilledButton.styleFrom(
                   backgroundColor: hasShift == false
-                      ? Colors.amber
+                      ? Colors.green[50]
                       : Colors.red[50],
                   foregroundColor: hasShift == false
-                      ? Colors.black
+                      ? Colors.green[700]
                       : Colors.red[700],
                   elevation: 0,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
                     side: hasShift == false
-                        ? BorderSide.none
+                        ? BorderSide(color: Colors.green[100]!)
                         : BorderSide(color: Colors.red[100]!),
                   ),
                 ),

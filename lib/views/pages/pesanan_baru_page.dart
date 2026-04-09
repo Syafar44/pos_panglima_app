@@ -2,16 +2,23 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:pos_panglima_app/data/notifiers.dart';
+// import 'package:pos_panglima_app/services/auth_service.dart';
+// import 'package:pos_panglima_app/services/inventory_service.dart';
 import 'package:pos_panglima_app/services/cart_service.dart';
 import 'package:pos_panglima_app/services/helper/dio_client.dart';
 import 'package:pos_panglima_app/services/menu_service.dart';
 import 'package:pos_panglima_app/services/storage/shift_storage_service.dart';
 import 'package:pos_panglima_app/utils/convert.dart';
+import 'package:pos_panglima_app/utils/loader_utils.dart';
 import 'package:pos_panglima_app/utils/modal_handling.dart';
 import 'package:pos_panglima_app/utils/modal_insufficient_stock.dart';
+import 'package:pos_panglima_app/utils/skeleton_loader.dart';
+import 'package:pos_panglima_app/views/components/ui/cart_item_tile.dart';
+import 'package:pos_panglima_app/views/components/ui/product_card.dart';
 import 'package:pos_panglima_app/views/pages/payment_page.dart';
 import 'package:pos_panglima_app/views/widgets/product_modal_widget.dart';
 import 'package:pos_panglima_app/views/widgets/update_product_modal_widget.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class PesananBaruPage extends StatefulWidget {
   const PesananBaruPage({super.key});
@@ -20,7 +27,8 @@ class PesananBaruPage extends StatefulWidget {
   State<PesananBaruPage> createState() => _PesananBaruPageState();
 }
 
-class _PesananBaruPageState extends State<PesananBaruPage> {
+class _PesananBaruPageState extends State<PesananBaruPage>
+    with WidgetsBindingObserver {
   String category = 'all';
   bool showSearch = false;
   bool? hasShift;
@@ -117,21 +125,21 @@ class _PesananBaruPageState extends State<PesananBaruPage> {
     }
   }
 
-  void _startDecreasing(int id) {
-    _timer = Timer.periodic(_interval, (_) {
-      _decreaseQuantity(id);
-    });
-  }
+  // void _startDecreasing(int id) {
+  //   _timer = Timer.periodic(_interval, (_) {
+  //     _decreaseQuantity(id);
+  //   });
+  // }
 
-  void _startIncreasing(int id) {
-    _timer = Timer.periodic(_interval, (_) {
-      _increaseQuantity(id);
-    });
-  }
+  // void _startIncreasing(int id) {
+  //   _timer = Timer.periodic(_interval, (_) {
+  //     _increaseQuantity(id);
+  //   });
+  // }
 
-  void _stopTimer() {
-    _timer?.cancel();
-  }
+  // void _stopTimer() {
+  //   _timer?.cancel();
+  // }
 
   List<Map<String, dynamic>> cartItems = [];
   int totalPayment = 0;
@@ -181,6 +189,10 @@ class _PesananBaruPageState extends State<PesananBaruPage> {
   @override
   void initState() {
     super.initState();
+
+    WidgetsBinding.instance.addObserver(this);
+    _checkPendingNotif();
+
     menuService = MenuService(apiClient.dio);
     cartService = CartService(apiClient.dio);
 
@@ -258,7 +270,7 @@ class _PesananBaruPageState extends State<PesananBaruPage> {
   Future<void> loadCart() async {
     try {
       final getCart = await cartService.getCart();
-      print(getCart);
+      debugPrint('getCart: $getCart');
       final newItems = List<Map<String, dynamic>>.from(
         getCart.data['data'] ?? [],
       );
@@ -290,17 +302,17 @@ class _PesananBaruPageState extends State<PesananBaruPage> {
     });
   }
 
-  void savedToCart(int id, dynamic onSaved) async {
+  void savedToCart(int id, int price, dynamic onSaved) async {
     Map<String, dynamic> payload = {
       "pos_menus_id": id,
       "quantity": 1,
-      "price": 0,
-      "subtotal": 0,
+      "price": price,
+      "subtotal": price,
       "tax": 0,
       "is_percentage": 0,
       "discount": 0,
       "discount_val": 0,
-      "total": 0,
+      "total": price,
       "max_qty": 0,
     };
 
@@ -323,8 +335,91 @@ class _PesananBaruPageState extends State<PesananBaruPage> {
     }
   }
 
+  void _showProductModal(BuildContext context, Map<String, dynamic> e) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (dialogContext) {
+        return ProductModalWidget(
+          title: e['title'],
+          category: e['category'],
+          id: e['id'],
+          codeProduct: e['code_produk'],
+          maxProduk: e['maxProduk'],
+          props: e['props'],
+          price: e['price'],
+          collection: e['maxProduk'] != 0,
+          imageUrl: e['image_url'],
+          onSaved: () {
+            loadCart();
+          },
+          dialogContext: dialogContext,
+        );
+      },
+    );
+  }
+
+  void _showUpdateModal(BuildContext context, Map<String, dynamic> item) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (BuildContext context) {
+        return UpdateProductModalWidget(
+          // Melemparkan data dari Map 'item' ke properti widget
+          id: item['id'],
+          posMenusId: item['pos_menus_id'],
+          posMenusName: item['pos_menus_name'],
+          quantity: item['quantity'],
+          price: item['price'],
+          subtotal: item['subtotal'],
+          tax: item['tax'],
+          isPercentage: item['is_percentage'],
+          discount: item['discount'],
+          discountVal: item['discount_val'],
+          total: item['total'],
+          maxQty: item['max_qty'],
+          imageUrl: item['image_url'],
+
+          pos_cart_props: item['pos_cart_props'] ?? [],
+
+          // Logika pengecekan koleksi (boolean)
+          collection:
+              (item['pos_cart_props'] != null &&
+              (item['pos_cart_props'] as List).isNotEmpty),
+
+          // Callback setelah data berhasil diupdate
+          onSaved: () {
+            loadCart();
+          },
+        );
+      },
+    );
+  }
+
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _checkPendingNotif();
+    }
+  }
+
+  Future<void> _checkPendingNotif() async {
+    final prefs = await SharedPreferences.getInstance();
+    final isVisible = prefs.getBool('notif_visible') ?? false;
+    if (isVisible) {
+      incomingNotifNotifier.value = {
+        'title': prefs.getString('notif_title') ?? '',
+        'body': prefs.getString('notif_body') ?? '',
+      };
+      // Reset agar tidak muncul lagi setelah dibaca
+      await prefs.setBool('notif_visible', false);
+    }
+  }
+
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     searchController.dispose();
     super.dispose();
   }
@@ -340,159 +435,6 @@ class _PesananBaruPageState extends State<PesananBaruPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // LayoutBuilder(
-                  //   builder: (context, constraints) {
-                  //     return Stack(
-                  //       children: [
-                  //         Row(
-                  //           children: [
-                  //             Container(
-                  //               width: constraints.maxWidth - 70,
-                  //               decoration: BoxDecoration(
-                  //                 border: Border(
-                  //                   bottom: BorderSide(color: Colors.black26),
-                  //                   top: BorderSide(color: Colors.black26),
-                  //                 ),
-                  //               ),
-                  //               child: Theme(
-                  //                 data: Theme.of(context).copyWith(
-                  //                   colorScheme: Theme.of(context).colorScheme
-                  //                       .copyWith(
-                  //                         surface: Colors.white,
-                  //                         surfaceContainer: Colors.white,
-                  //                         onSurface: Colors.black,
-                  //                       ),
-                  //                 ),
-                  //                 child: DropdownMenu<String>(
-                  //                   width: constraints.maxWidth - 70,
-                  //                   hintText: 'Semua kategori',
-                  //                   controller: categoryController,
-                  //                   enableFilter: true,
-                  //                   enableSearch: true,
-                  //                   menuHeight: 500,
-                  //                   inputDecorationTheme:
-                  //                       const InputDecorationTheme(
-                  //                         border: OutlineInputBorder(
-                  //                           borderRadius: BorderRadius.zero,
-                  //                           borderSide: BorderSide.none,
-                  //                         ),
-                  //                         filled: true,
-                  //                         fillColor: Colors.white,
-                  //                         contentPadding: EdgeInsets.symmetric(
-                  //                           horizontal: 10.0,
-                  //                         ),
-                  //                       ),
-                  //                   dropdownMenuEntries: categoryDropdownItems,
-                  //                   onSelected: (value) {
-                  //                     setState(() {
-                  //                       category = value ?? 'all';
-                  //                     });
-                  //                   },
-                  //                 ),
-                  //               ),
-                  //             ),
-                  //             Container(
-                  //               decoration: BoxDecoration(
-                  //                 color: Colors.white,
-                  //                 border: Border(
-                  //                   bottom: BorderSide(color: Colors.black26),
-                  //                   top: BorderSide(color: Colors.black26),
-                  //                   left: BorderSide(color: Colors.black26),
-                  //                 ),
-                  //               ),
-                  //               padding: const EdgeInsets.symmetric(
-                  //                 horizontal: 10.5,
-                  //                 vertical: 4.0,
-                  //               ),
-                  //               child: IconButton(
-                  //                 iconSize: 30.0,
-                  //                 splashRadius: 20,
-                  //                 onPressed: () {
-                  //                   setState(() {
-                  //                     showSearch = !showSearch;
-                  //                     if (showSearch) {
-                  //                       category = 'all';
-                  //                     } else {
-                  //                       searchController.clear();
-                  //                     }
-                  //                   });
-                  //                 },
-                  //                 icon: Icon(
-                  //                   showSearch ? Icons.close : Icons.search,
-                  //                 ),
-                  //               ),
-                  //             ),
-                  //           ],
-                  //         ),
-                  //         if (showSearch)
-                  //           Positioned.fill(
-                  //             child: Row(
-                  //               children: [
-                  //                 Container(
-                  //                   decoration: const BoxDecoration(
-                  //                     color: Colors.white,
-                  //                   ),
-                  //                   padding: const EdgeInsets.symmetric(
-                  //                     horizontal: 10.8,
-                  //                     vertical: 3.5,
-                  //                   ),
-                  //                   child: IconButton(
-                  //                     iconSize: 30.0,
-                  //                     splashRadius: 20,
-                  //                     onPressed: () {
-                  //                       setState(() {
-                  //                         showSearch = false;
-                  //                         searchController.clear();
-                  //                       });
-                  //                     },
-                  //                     icon: const Icon(
-                  //                       Icons.arrow_back,
-                  //                       color: Colors.black,
-                  //                     ),
-                  //                   ),
-                  //                 ),
-                  //                 SizedBox(
-                  //                   width: constraints.maxWidth - 70,
-                  //                   child: Container(
-                  //                     decoration: BoxDecoration(
-                  //                       color:
-                  //                           Theme.of(
-                  //                             context,
-                  //                           ).inputDecorationTheme.fillColor ??
-                  //                           Colors.white,
-                  //                       borderRadius: BorderRadius.zero,
-                  //                       border: Border.all(
-                  //                         color: Colors.grey.shade300,
-                  //                       ),
-                  //                     ),
-                  //                     child: Padding(
-                  //                       padding: const EdgeInsets.symmetric(
-                  //                         horizontal: 4.0,
-                  //                         vertical: 3.0,
-                  //                       ),
-                  //                       child: TextField(
-                  //                         controller: searchController,
-                  //                         autofocus: true,
-                  //                         decoration: const InputDecoration(
-                  //                           hintText: 'Cari Produk...',
-                  //                           border: InputBorder.none,
-                  //                           contentPadding:
-                  //                               EdgeInsets.symmetric(
-                  //                                 vertical: 10,
-                  //                                 horizontal: 6,
-                  //                               ),
-                  //                         ),
-                  //                       ),
-                  //                     ),
-                  //                   ),
-                  //                 ),
-                  //               ],
-                  //             ),
-                  //           ),
-                  //       ],
-                  //     );
-                  //   },
-                  // ),
                   Padding(
                     padding: const EdgeInsets.only(
                       left: 12.0,
@@ -525,7 +467,11 @@ class _PesananBaruPageState extends State<PesananBaruPage> {
                               duration: const Duration(milliseconds: 300),
                               child: showSearch
                                   ? _buildSearchField(mainWidth, actionWidth)
-                                  : _buildDropdownField(mainWidth, actionWidth),
+                                  : _buildDropdownField(
+                                      mainWidth,
+                                      actionWidth,
+                                      constraints,
+                                    ),
                             ),
                           ),
                         );
@@ -534,143 +480,53 @@ class _PesananBaruPageState extends State<PesananBaruPage> {
                   ),
                   Expanded(
                     child: isLoadingMenu
-                        ? Center(child: CircularProgressIndicator())
+                        ? Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: SkeletonLoader.menuSkeleton(
+                              const Duration(seconds: 10),
+                              () {
+                                setState(() => isLoadingMenu = true);
+                                getMenu();
+                              },
+                            ),
+                          )
                         : Padding(
-                            padding: const EdgeInsets.all(10.0),
+                            padding: const EdgeInsets.all(
+                              16.0,
+                            ), // Padding lebih besar untuk kesan lega
                             child: LayoutBuilder(
                               builder: (context, constraints) {
                                 return GridView.builder(
-                                  cacheExtent: 800,
-                                  physics: const BouncingScrollPhysics(),
                                   itemCount: produkList.length,
-                                  addAutomaticKeepAlives: false,
-                                  addRepaintBoundaries: true,
-                                  addSemanticIndexes: false,
+                                  physics: const BouncingScrollPhysics(),
                                   gridDelegate:
                                       SliverGridDelegateWithFixedCrossAxisCount(
-                                        crossAxisCount: 5,
-                                        crossAxisSpacing: 7,
-                                        mainAxisSpacing: 10,
+                                        crossAxisCount:
+                                            constraints.maxWidth > 600
+                                            ? 5
+                                            : 2, // Responsif: 5 kolom di tab/pc, 2 di hp
+                                        crossAxisSpacing: 2,
+                                        mainAxisSpacing: 5,
                                         childAspectRatio:
-                                            constraints.maxWidth / (5 * 190),
+                                            0.70, // Rasio tetap agar card tidak gepeng
                                       ),
                                   itemBuilder: (context, index) {
                                     final e = produkList[index];
-
-                                    return RepaintBoundary(
-                                      child: InkWell(
-                                        borderRadius: BorderRadius.circular(13),
-                                        onTap: () {
-                                          if (e['category'] != 'Packaging') {
-                                            showDialog(
-                                              context: context,
-                                              builder: (dialogContext) {
-                                                return ProductModalWidget(
-                                                  title: e['title'],
-                                                  category: e['category'],
-                                                  id: e['id'],
-                                                  codeProduct: e['code_produk'],
-                                                  maxProduk: e['maxProduk'],
-                                                  props: e['props'],
-                                                  price: e['price'],
-                                                  collection:
-                                                      e['maxProduk'] != 0,
-                                                  onSaved: () {
-                                                    loadCart();
-                                                  },
-                                                  dialogContext: dialogContext,
-                                                );
-                                              },
-                                            );
-                                          } else {
-                                            savedToCart(e['id'], () {
-                                              loadCart();
-                                            });
-                                          }
-                                        },
-                                        child: Card(
-                                          color: Colors.white,
-                                          elevation: 1,
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(
-                                              12,
-                                            ),
-                                          ),
-                                          child: Column(
-                                            children: [
-                                              Container(
-                                                width: double.infinity,
-                                                alignment: Alignment.center,
-                                                decoration: BoxDecoration(
-                                                  gradient: LinearGradient(
-                                                    colors: [
-                                                      secondColor(e['title']),
-                                                      baseColor(e['title']),
-                                                    ],
-                                                    begin: Alignment.topLeft,
-                                                    end: Alignment.bottomRight,
-                                                  ),
-                                                  borderRadius:
-                                                      const BorderRadius.vertical(
-                                                        top: Radius.circular(
-                                                          12,
-                                                        ),
-                                                      ),
-                                                ),
-                                                padding: const EdgeInsets.all(
-                                                  15.0,
-                                                ),
-                                                child: Text(
-                                                  getInitials(e['title']),
-                                                  style: const TextStyle(
-                                                    fontWeight: FontWeight.w900,
-                                                    fontSize: 40.0,
-                                                  ),
-                                                ),
-                                              ),
-                                              Expanded(
-                                                child: Padding(
-                                                  padding: const EdgeInsets.all(
-                                                    8.0,
-                                                  ),
-                                                  child: Align(
-                                                    alignment:
-                                                        Alignment.topLeft,
-                                                    child: Column(
-                                                      crossAxisAlignment:
-                                                          CrossAxisAlignment
-                                                              .start,
-                                                      mainAxisAlignment:
-                                                          MainAxisAlignment
-                                                              .spaceBetween,
-                                                      children: [
-                                                        Text(
-                                                          e['title'],
-                                                          maxLines: 2,
-                                                          overflow: TextOverflow
-                                                              .ellipsis,
-                                                          style:
-                                                              const TextStyle(
-                                                                fontWeight:
-                                                                    FontWeight
-                                                                        .bold,
-                                                                fontSize: 13,
-                                                              ),
-                                                        ),
-                                                        Text(
-                                                          convertIDR(
-                                                            e['price'],
-                                                          ),
-                                                        ),
-                                                      ],
-                                                    ),
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
+                                    return ProductCard(
+                                      product: e,
+                                      onTap: () {
+                                        if (e['category'] != 'Packaging' &&
+                                            e['category'] !=
+                                                'Isian / Topping') {
+                                          _showProductModal(context, e);
+                                        } else {
+                                          savedToCart(
+                                            e['id'],
+                                            e['price'] ?? 0,
+                                            () => loadCart(),
+                                          );
+                                        }
+                                      },
                                     );
                                   },
                                 );
@@ -693,434 +549,216 @@ class _PesananBaruPageState extends State<PesananBaruPage> {
                     LayoutBuilder(
                       builder: (context, constraints) {
                         return Container(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 12,
+                          ),
                           width: constraints.maxWidth,
+                          // Kita hapus border atas-bawah yang kaku, ganti dengan shadow halus atau border rounded
                           decoration: BoxDecoration(
-                            border: Border(
-                              bottom: BorderSide(color: Colors.black26),
-                              top: BorderSide(color: Colors.black26),
-                            ),
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
                           ),
                           child: Theme(
                             data: Theme.of(context).copyWith(
+                              // Memperbaiki visual menu pop-up agar konsisten dengan Material 3
                               colorScheme: Theme.of(context).colorScheme
                                   .copyWith(
-                                    surface:
-                                        Colors.white, // background dropdown
-                                    surfaceContainer: Colors.white,
-                                    onSurface: Colors.black, // warna teks
+                                    surface: Colors.white,
+                                    onSurface: Colors.black87,
                                   ),
                             ),
                             child: DropdownMenu<String>(
                               width: constraints.maxWidth,
-                              hintText: 'Pelanggan',
+                              hintText: 'Pilih Pelanggan',
+                              leadingIcon: const Icon(
+                                Icons.person_outline,
+                                size: 20,
+                              ), // Tambahkan ikon agar lebih user-friendly
                               controller: pelangganController,
                               enableFilter: true,
                               enableSearch: true,
-                              inputDecorationTheme: const InputDecorationTheme(
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.zero,
-                                  borderSide: BorderSide.none,
+                              menuStyle: MenuStyle(
+                                backgroundColor: WidgetStateProperty.all(
+                                  Colors.white,
                                 ),
-                                filled: true,
-                                fillColor: Colors.white,
-                                contentPadding: EdgeInsets.symmetric(
-                                  horizontal: 10.0,
+                                surfaceTintColor: WidgetStateProperty.all(
+                                  Colors.white,
+                                ),
+                                fixedSize: WidgetStateProperty.all(
+                                  Size(
+                                    constraints.maxWidth - 18,
+                                    constraints.maxHeight,
+                                  ),
                                 ),
                               ),
-                              dropdownMenuEntries: [
+                              // Mempercantik Input Style
+                              inputDecorationTheme: InputDecorationTheme(
+                                filled: true,
+                                fillColor: Colors.white,
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 12,
+                                ),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: BorderSide(
+                                    color: Colors.grey.shade200,
+                                  ),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: BorderSide(
+                                    color: Colors.grey.shade200,
+                                  ),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: BorderSide(
+                                    color: Theme.of(context).primaryColor,
+                                    width: 1.5,
+                                  ),
+                                ),
+                              ),
+
+                              dropdownMenuEntries: const [
                                 DropdownMenuEntry<String>(
                                   value: 'Semua Pelanggan',
                                   label: 'Semua Pelanggan',
+                                  leadingIcon: Icon(Icons.group_outlined),
                                 ),
+                                // Tambahkan entri lain di sini
                               ],
                               onSelected: (value) {
-                                // setState(() {
-                                //   category = value ?? 'all';
-                                // });
+                                // Logika Anda
                               },
                             ),
                           ),
                         );
                       },
                     ),
-                    Expanded(
-                      child: SingleChildScrollView(
-                        child: Column(
-                          children: cartItems.isEmpty
-                              ? [
-                                  SizedBox(
-                                    height: 450.0,
-                                    child: Column(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.center,
-                                      children: [
-                                        Center(
-                                          child: Text(
-                                            'Keranjang kosong',
-                                            style: TextStyle(
-                                              fontSize: 18.0,
-                                              color: Colors.black54,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ]
-                              : cartItems.asMap().entries.map((entry) {
-                                  final i = entry.key;
-                                  final e = cartItems[i];
 
-                                  return InkWell(
-                                    onTap: () {
-                                      if (e['price'] != 0) {
-                                        showDialog(
-                                          context: context,
-                                          barrierDismissible: true,
-                                          builder: (BuildContext context) {
-                                            return UpdateProductModalWidget(
-                                              id: e['id'],
-                                              posMenusId: e['pos_menus_id'],
-                                              posMenusName: e['pos_menus_name'],
-                                              quantity: e['quantity'],
-                                              price: e['price'],
-                                              subtotal: e['subtotal'],
-                                              tax: e['tax'],
-                                              isPercentage: e['is_percentage'],
-                                              discount: e['discount'],
-                                              discountVal: e['discount_val'],
-                                              total: e['total'],
-                                              maxQty: e['max_qty'],
-                                              pos_cart_props:
-                                                  e['pos_cart_props'] ?? [],
-                                              collection:
-                                                  (e['pos_cart_props'] !=
-                                                      null &&
-                                                  (e['pos_cart_props'] as List)
-                                                      .isNotEmpty),
-                                              onSaved: () {
-                                                loadCart();
-                                              },
-                                            );
-                                          },
-                                        );
-                                      }
-                                    },
-                                    child: Container(
-                                      padding: EdgeInsets.symmetric(
-                                        horizontal: 20.0,
-                                        vertical: 10.0,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        border: Border(
-                                          bottom: BorderSide(
-                                            color: Colors.black26,
-                                          ),
-                                        ),
-                                      ),
-                                      child: Column(
-                                        children: [
-                                          Row(
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.spaceBetween,
-                                            children: [
-                                              Expanded(
-                                                child: Column(
-                                                  crossAxisAlignment:
-                                                      CrossAxisAlignment.start,
-                                                  children: [
-                                                    Text(
-                                                      cartItems[i]['pos_menus_name'],
-                                                      softWrap: true,
-                                                      overflow:
-                                                          TextOverflow.visible,
-                                                      style: TextStyle(
-                                                        fontSize: 18,
-                                                        fontWeight:
-                                                            FontWeight.bold,
-                                                      ),
-                                                    ),
-                                                    Row(
-                                                      children: [
-                                                        Text(
-                                                          convertIDR(
-                                                            cartItems[i]['total'],
-                                                          ),
-                                                          style: TextStyle(
-                                                            fontSize: 16,
-                                                            fontWeight:
-                                                                FontWeight.bold,
-                                                          ),
-                                                        ),
-                                                        (cartItems[i]['discount'] ??
-                                                                        0) +
-                                                                    (cartItems[i]['discount_val'] ??
-                                                                        0) !=
-                                                                0
-                                                            ? Text(
-                                                                ' ( - ${convertIDR(cartItems[i]['subtotal'] - cartItems[i]['total'])} )',
-                                                                style:
-                                                                    TextStyle(
-                                                                      fontSize:
-                                                                          16,
-                                                                    ),
-                                                              )
-                                                            : SizedBox(),
-                                                      ],
-                                                    ),
-                                                    if (e['max_qty'] != 0 &&
-                                                        e['pos_cart_props'] !=
-                                                            null)
-                                                      Column(
-                                                        crossAxisAlignment:
-                                                            CrossAxisAlignment
-                                                                .start,
-                                                        children:
-                                                            (e['pos_cart_props']
-                                                                    as List)
-                                                                .where(
-                                                                  (item) =>
-                                                                      item['quantity'] !=
-                                                                      0,
-                                                                )
-                                                                .map<Widget>((
-                                                                  item,
-                                                                ) {
-                                                                  return Text(
-                                                                    '${item['quantity']}x ${item['pos_menus_name']}',
-                                                                  );
-                                                                })
-                                                                .toList(),
-                                                      ),
-                                                    if (e['max_qty'] != 0 &&
-                                                        e['pos_cart_materials'] !=
-                                                            null)
-                                                      Column(
-                                                        crossAxisAlignment:
-                                                            CrossAxisAlignment
-                                                                .start,
-                                                        children:
-                                                            (e['pos_cart_materials']
-                                                                    as List)
-                                                                .where(
-                                                                  (item) =>
-                                                                      item['quantity'] !=
-                                                                      0,
-                                                                )
-                                                                .map<Widget>((
-                                                                  item,
-                                                                ) {
-                                                                  return Text(
-                                                                    '${item['quantity']}x ${item['items_name']}',
-                                                                  );
-                                                                })
-                                                                .toList(),
-                                                      ),
-                                                  ],
-                                                ),
-                                              ),
-                                              IconButton(
-                                                onPressed: () async {
-                                                  _deletedCartItem(
-                                                    cartItems[i]['id'],
-                                                  );
-                                                },
-                                                icon: Icon(
-                                                  Icons.delete,
-                                                  color: Colors.redAccent,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                          SizedBox(height: 20.0),
-                                          Row(
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.end,
-                                            children: [
-                                              Container(
-                                                padding: EdgeInsets.symmetric(
-                                                  horizontal: 20.0,
-                                                  vertical: 10.0,
-                                                ),
-                                                decoration: BoxDecoration(
-                                                  border: Border.all(
-                                                    color: Colors.amber,
-                                                  ),
-                                                  borderRadius:
-                                                      BorderRadius.circular(
-                                                        50.0,
-                                                      ),
-                                                ),
-                                                child: Text('PCS'),
-                                              ),
-                                              SizedBox(width: 20.0),
-                                              GestureDetector(
-                                                onLongPressStart: (_) {
-                                                  _startDecreasing(
-                                                    cartItems[i]['id'],
-                                                  );
-                                                },
-                                                onLongPressEnd: (_) {
-                                                  _stopTimer();
-                                                },
-                                                child: IconButton(
-                                                  style: IconButton.styleFrom(
-                                                    backgroundColor:
-                                                        Colors.grey[300],
-                                                    shadowColor: Colors.black,
-                                                    padding: EdgeInsets.all(5),
-                                                    shape: CircleBorder(),
-                                                  ),
-                                                  onPressed: () {
-                                                    _decreaseQuantity(
-                                                      cartItems[i]['id'],
-                                                    );
-                                                  },
-                                                  icon: Icon(
-                                                    Icons.remove,
-                                                    size: 20,
-                                                  ),
-                                                ),
-                                              ),
-                                              Container(
-                                                alignment: Alignment.center,
-                                                width: 40.0,
-                                                child: Text(
-                                                  // '$quantity',
-                                                  '${cartItems[i]['quantity']}',
-                                                  style: TextStyle(
-                                                    fontSize: 20,
-                                                  ),
-                                                ),
-                                              ),
-                                              GestureDetector(
-                                                onLongPressStart: (_) {
-                                                  _startIncreasing(
-                                                    cartItems[i]['id'],
-                                                  );
-                                                },
-                                                onLongPressEnd: (_) {
-                                                  _stopTimer();
-                                                },
-                                                child: IconButton(
-                                                  style: IconButton.styleFrom(
-                                                    backgroundColor:
-                                                        Colors.amber,
-                                                    padding: EdgeInsets.all(5),
-                                                    shape: CircleBorder(),
-                                                  ),
-                                                  onPressed: () {
-                                                    _increaseQuantity(
-                                                      cartItems[i]['id'],
-                                                    );
-                                                  },
-                                                  icon: Icon(
-                                                    Icons.add,
-                                                    size: 20,
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  );
-                                }).toList(),
-                        ),
-                      ),
+                    Expanded(
+                      child: cartItems.isEmpty
+                          ? _buildEmptyState()
+                          : ListView.builder(
+                              // Lebih efisien daripada SingleChildScrollView + Column
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              itemCount: cartItems.length,
+                              itemBuilder: (context, index) {
+                                final e = cartItems[index];
+                                return CartItemTile(
+                                  item: e,
+                                  onDelete: () => _deletedCartItem(e['id']),
+                                  onIncrease: () => _increaseQuantity(e['id']),
+                                  onDecrease: () => _decreaseQuantity(e['id']),
+                                  onUpdate: () => _showUpdateModal(context, e),
+                                );
+                              },
+                            ),
                     ),
                     Column(
+                      mainAxisSize:
+                          MainAxisSize.min, // Agar tidak memakan space berlebih
                       children: [
+                        // 1. Section Subtotal (Clean Borderless Style)
                         Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 20.0,
+                            vertical: 16.0,
+                          ),
                           decoration: BoxDecoration(
+                            color: Colors.white,
                             border: Border(
-                              top: BorderSide(color: Colors.black26),
-                              bottom: BorderSide(color: Colors.black26),
+                              top: BorderSide(
+                                color: Colors.grey.withOpacity(0.2),
+                                width: 1,
+                              ),
                             ),
                           ),
-                          child: Padding(
-                            padding: EdgeInsets.all(12.0),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  'Subtotal',
-                                  style: TextStyle(fontSize: 16.0),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text(
+                                'Subtotal',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  color: Colors.black54,
+                                  fontWeight: FontWeight.w500,
                                 ),
-                                Text(
-                                  convertIDR(totalPayment),
-                                  style: TextStyle(
-                                    fontSize: 17.0,
-                                    fontWeight: FontWeight.bold,
-                                  ),
+                              ),
+                              Text(
+                                convertIDR(totalPayment),
+                                style: const TextStyle(
+                                  fontSize: 18.0,
+                                  fontWeight: FontWeight
+                                      .w900, // Lebih tegas untuk angka utama
+                                  letterSpacing: -0.5,
+                                  color: Colors.black87,
                                 ),
-                              ],
-                            ),
+                              ),
+                            ],
                           ),
                         ),
+
+                        // 2. Section Tombol Bayar
                         Padding(
-                          padding: EdgeInsets.all(12.0),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: ElevatedButton(
-                                  onPressed: () {
-                                    if (hasShift == true) {
-                                      // if (hasShift == false) {
-                                      if (cartItems.isNotEmpty) {
-                                        Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (context) {
-                                              return PaymentPage();
-                                            },
-                                          ),
-                                        );
-                                      }
-                                    } else {
-                                      showDialog(
-                                        context: context,
-                                        builder: (context) {
-                                          return ModalHandling(
-                                            type: 'warning',
-                                            title: 'Perhatian',
-                                            description:
-                                                'Shift belum dimulai. Mulai shift terlebih dahulu untuk melakukan transaksi.',
-                                          );
-                                        },
-                                      );
-                                    }
-                                  },
-                                  style: IconButton.styleFrom(
-                                    backgroundColor: Colors.amber,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(6),
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+                          child: SizedBox(
+                            width: double.infinity,
+                            height: 42,
+                            child: ElevatedButton(
+                              onPressed: () {
+                                if (hasShift == true) {
+                                  if (cartItems.isNotEmpty) {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) =>
+                                            const PaymentPage(),
+                                      ),
+                                    );
+                                  }
+                                } else {
+                                  showDialog(
+                                    context: context,
+                                    builder: (context) => const ModalHandling(
+                                      type: 'warning',
+                                      title: 'Perhatian',
+                                      description:
+                                          'Shift belum dimulai. Mulai shift terlebih dahulu.',
                                     ),
+                                  );
+                                }
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.amber,
+                                foregroundColor: Colors.black87,
+                                elevation: 0, // Flat design lebih modern
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(
+                                    12,
+                                  ), // Border radius lebih besar
+                                ),
+                              ),
+                              child: const Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.shopping_cart_checkout_outlined,
+                                    size: 20,
                                   ),
-                                  child: Text(
-                                    'Bayar',
+                                  SizedBox(width: 12),
+                                  Text(
+                                    'Proses Pembayaran',
                                     style: TextStyle(
-                                      color: Colors.black87,
+                                      fontSize: 16,
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
-                                ),
+                                ],
                               ),
-                              // SizedBox(width: 10.0),
-                              // IconButton(
-                              //   onPressed: () {},
-                              //   icon: Icon(Icons.menu),
-                              //   style: IconButton.styleFrom(
-                              //     backgroundColor: Colors.grey[300],
-                              //     shadowColor: Colors.black,
-                              //     padding: EdgeInsets.all(5),
-                              //     shape: RoundedRectangleBorder(
-                              //       borderRadius: BorderRadius.circular(6),
-                              //     ),
-                              //   ),
-                              // ),
-                            ],
+                            ),
                           ),
                         ),
                       ],
@@ -1256,7 +894,11 @@ class _PesananBaruPageState extends State<PesananBaruPage> {
     );
   }
 
-  Widget _buildDropdownField(double width, double actionWidth) {
+  Widget _buildDropdownField(
+    double width,
+    double actionWidth,
+    dynamic constraints,
+  ) {
     return Row(
       key: const ValueKey('dropdown'),
       children: [
@@ -1267,7 +909,14 @@ class _PesananBaruPageState extends State<PesananBaruPage> {
             hintText: 'Semua kategori',
             controller: categoryController,
             enableFilter: true,
-            menuHeight: 300,
+            menuHeight: 500,
+            menuStyle: MenuStyle(
+              backgroundColor: WidgetStateProperty.all(Colors.white),
+              surfaceTintColor: WidgetStateProperty.all(Colors.white),
+              fixedSize: WidgetStateProperty.all(
+                Size(constraints.maxWidth, constraints.maxHeight),
+              ),
+            ),
             inputDecorationTheme: const InputDecorationTheme(
               filled: true,
               fillColor: Colors.transparent,
@@ -1332,6 +981,53 @@ class _PesananBaruPageState extends State<PesananBaruPage> {
       child: IconButton(
         icon: Icon(icon, color: Colors.amber[900], size: 22),
         onPressed: onPressed,
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return SingleChildScrollView(
+      child: Container(
+        padding: const EdgeInsets.only(top: 80),
+        width: double.infinity,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            // Ikon keranjang kosong dengan background lembut
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.amber.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.shopping_basket_outlined,
+                size: 50,
+                color: Colors.amber,
+              ),
+            ),
+            const SizedBox(height: 24),
+            const Text(
+              'Keranjang Masih Kosong',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Silakan pilih menu di sebelah kiri untuk\nmulai menambahkan pesanan.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.black54,
+                height: 1.5,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

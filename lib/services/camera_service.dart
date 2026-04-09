@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:camera/camera.dart';
+import 'package:flutter/foundation.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 class CameraService {
@@ -19,7 +20,7 @@ class CameraService {
 
     _controller = CameraController(
       camera,
-      ResolutionPreset.medium,
+      ResolutionPreset.low,
       enableAudio: false,
       imageFormatGroup: ImageFormatGroup.jpeg,
     );
@@ -30,14 +31,14 @@ class CameraService {
   Future<File?> capture() async {
     try {
       if (_controller == null || !_controller!.value.isInitialized) {
-        print("Camera not initialized");
+        debugPrint("Camera not initialized");
         return null;
       }
 
       final XFile file = await _controller!.takePicture();
       return File(file.path);
     } catch (e) {
-      print("Camera capture error: $e");
+      debugPrint("Camera capture error: $e");
       return null;
     }
   }

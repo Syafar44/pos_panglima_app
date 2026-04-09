@@ -2,11 +2,12 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:pos_panglima_app/services/cart_service.dart';
 import 'package:pos_panglima_app/services/helper/dio_client.dart';
-import 'dart:async';
 import 'package:pos_panglima_app/services/storage/shift_storage_service.dart';
 import 'package:pos_panglima_app/utils/convert.dart';
 import 'package:pos_panglima_app/utils/modal_handling.dart';
 import 'package:pos_panglima_app/utils/modal_insufficient_stock.dart';
+import 'package:pos_panglima_app/utils/quantity_timer_mixin.dart';
+import 'package:pos_panglima_app/views/components/ui/step_button.dart';
 
 class ProductModalWidget extends StatefulWidget {
   const ProductModalWidget({
@@ -21,6 +22,7 @@ class ProductModalWidget extends StatefulWidget {
     this.maxProduk,
     required this.onSaved,
     required this.dialogContext,
+    this.imageUrl,
   });
 
   final String title;
@@ -33,12 +35,14 @@ class ProductModalWidget extends StatefulWidget {
   final int? maxProduk;
   final dynamic onSaved;
   final dynamic dialogContext;
+  final String? imageUrl;
 
   @override
   State<ProductModalWidget> createState() => _ProductModalWidgetState();
 }
 
-class _ProductModalWidgetState extends State<ProductModalWidget> {
+class _ProductModalWidgetState extends State<ProductModalWidget>
+    with QuantityTimerMixin {
   final apiClient = ApiClient();
   late final CartService cartService;
   int quantity = 1;
@@ -46,37 +50,12 @@ class _ProductModalWidgetState extends State<ProductModalWidget> {
   bool selectedUnit = false;
   bool? hasShift;
 
-  Timer? _timer;
-  final Duration _interval = Duration(milliseconds: 100);
-
   void _decreaseQuantity() {
-    if (quantity > 1) {
-      setState(() {
-        quantity--;
-      });
-    }
+    if (quantity > 1) setState(() => quantity--);
   }
 
   void _increaseQuantity() {
-    setState(() {
-      quantity++;
-    });
-  }
-
-  void _startDecreasing() {
-    _timer = Timer.periodic(_interval, (_) {
-      _decreaseQuantity();
-    });
-  }
-
-  void _startIncreasing() {
-    _timer = Timer.periodic(_interval, (_) {
-      _increaseQuantity();
-    });
-  }
-
-  void _stopTimer() {
-    _timer?.cancel();
+    setState(() => quantity++);
   }
 
   Map<int, int> selectedProps = {};
@@ -97,7 +76,7 @@ class _ProductModalWidgetState extends State<ProductModalWidget> {
       selectedProps[id] = (selectedProps[id] ?? 0) + 1;
     });
 
-    print(selectedProps);
+    debugPrint('selectedProps: $selectedProps');
   }
 
   void resetVariants() {
@@ -202,6 +181,24 @@ class _ProductModalWidgetState extends State<ProductModalWidget> {
     });
   }
 
+  void _showWarningShift() {
+    showDialog(
+      context: context,
+      builder: (context) => ModalHandling(
+        type: 'warning',
+        title: 'Perhatian',
+        description:
+            'Shift belum dimulai. Mulai shift terlebih dahulu untuk melakukan transaksi.',
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    disposeTimer();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Dialog(
@@ -218,107 +215,82 @@ class _ProductModalWidgetState extends State<ProductModalWidget> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                padding: EdgeInsets.symmetric(vertical: 20.0, horizontal: 30.0),
+                padding: const EdgeInsets.symmetric(
+                  vertical: 16.0,
+                  horizontal: 20.0,
+                ), // Padding disesuaikan agar lebih proporsional
                 decoration: BoxDecoration(
-                  border: Border(bottom: BorderSide(color: Colors.grey)),
+                  color: Colors.white,
+                  border: Border(
+                    top: BorderSide(color: Colors.grey.shade200, width: 1.5),
+                  ),
+                  borderRadius: BorderRadius.only(
+                    topLeft: Radius.circular(20),
+                    topRight: Radius.circular(20),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.5),
+                      blurRadius: 10,
+                      offset: const Offset(0, -4),
+                    ),
+                  ],
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          widget.title,
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 20,
+                    // Sisi Kiri: Info Produk
+                    Expanded(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            widget.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 18,
+                            ),
                           ),
-                        ),
-                        Text(
-                          widget.category,
-                          style: TextStyle(
-                            // fontWeight: FontWeight.bold,
-                            fontSize: 14,
+                          Text(
+                            widget.category,
+                            style: TextStyle(
+                              color: Colors.grey[600],
+                              fontSize: 13,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
+
+                    // Sisi Kanan: Harga & Tombol
                     Row(
                       children: [
                         Column(
+                          mainAxisSize: MainAxisSize.min,
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
-                            Text(
+                            const Text(
                               'Subtotal',
                               style: TextStyle(
                                 color: Colors.black54,
-                                fontSize: 15,
+                                fontSize: 12,
                               ),
                             ),
-                            SizedBox(height: 4),
                             Text(
                               convertIDR(widget.price * quantity),
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 20,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w900,
+                                fontSize: 18,
+                                color: Colors.orange,
                               ),
                             ),
                           ],
                         ),
-                        SizedBox(width: 10),
-                        ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: widget.maxProduk == 0
-                                ? Colors.amber
-                                : totalSelectedProps ==
-                                      (widget.maxProduk ?? 0) * quantity
-                                ? Colors.amber
-                                : Colors.grey[300],
-                            padding: EdgeInsets.symmetric(
-                              horizontal: 22,
-                              vertical: 14,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
-                          onPressed: () => {
-                            if (hasShift == true)
-                              {
-                                if (widget.maxProduk != null)
-                                  {
-                                    if (totalSelectedProps ==
-                                        (widget.maxProduk ?? 0) * quantity)
-                                      {savedToCart()},
-                                  }
-                                else
-                                  {savedToCart()},
-                              }
-                            else
-                              {
-                                showDialog(
-                                  context: context,
-                                  builder: (context) {
-                                    return ModalHandling(
-                                      type: 'warning',
-                                      title: 'Perhatian',
-                                      description:
-                                          'Shift belum dimulai. Mulai shift terlebih dahulu untuk melakukan transaksi.',
-                                    );
-                                  },
-                                ),
-                              },
-                          },
-                          child: Text(
-                            'Simpan',
-                            style: TextStyle(
-                              color: Colors.black,
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
+                        const SizedBox(width: 16),
+                        _buildSaveButton(),
                       ],
                     ),
                   ],
@@ -330,114 +302,156 @@ class _ProductModalWidgetState extends State<ProductModalWidget> {
                 child: Column(
                   children: [
                     Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        // Bagian Visual/Thumbnail Produk
                         Container(
-                          width: 200,
-                          height: 130,
+                          width: 140,
+                          height: 110,
                           decoration: BoxDecoration(
                             gradient: LinearGradient(
                               colors: [
-                                secondColor(widget.title),
+                                secondColor(widget.title).withOpacity(0.8),
                                 baseColor(widget.title),
                               ],
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
                             ),
-                            borderRadius: BorderRadius.circular(10),
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: baseColor(widget.title).withOpacity(0.3),
+                                blurRadius: 8,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
                           ),
                           alignment: Alignment.center,
-                          child: Text(
-                            getInitials(widget.title),
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 70,
-                            ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(16),
+                            child:
+                                (widget.imageUrl != null &&
+                                    widget.imageUrl!.isNotEmpty)
+                                ? Image.network(
+                                    widget.imageUrl!,
+                                    width: 140,
+                                    height: 110,
+                                    fit: BoxFit.cover,
+                                    errorBuilder:
+                                        (context, error, stackTrace) => Text(
+                                          getInitials(widget.title),
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 48,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                    loadingBuilder:
+                                        (context, child, loadingProgress) {
+                                          if (loadingProgress == null)
+                                            return child;
+                                          return Center(
+                                            child: CircularProgressIndicator(
+                                              color: Colors.white,
+                                              value:
+                                                  loadingProgress
+                                                          .expectedTotalBytes !=
+                                                      null
+                                                  ? loadingProgress
+                                                            .cumulativeBytesLoaded /
+                                                        loadingProgress
+                                                            .expectedTotalBytes!
+                                                  : null,
+                                            ),
+                                          );
+                                        },
+                                  )
+                                : Text(
+                                    getInitials(widget.title),
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 48,
+                                      color: Colors.white,
+                                    ),
+                                  ),
                           ),
                         ),
-                        SizedBox(width: 16),
+                        const SizedBox(width: 20),
+
+                        // Bagian Informasi & Stepper
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Harga ${convertIDR(widget.price)}',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 25,
+                                convertIDR(widget.price),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 26,
+                                  letterSpacing: -0.5,
+                                  color: Colors.black87,
                                 ),
                               ),
-                              Text('Kuantitas'),
-                              SizedBox(height: 10),
+                              Text(
+                                'Atur Kuantitas',
+                                style: TextStyle(
+                                  color: Colors.grey[600],
+                                  fontSize: 13,
+                                ),
+                              ),
+                              const SizedBox(height: 15),
+
+                              // Custom Stepper Row
                               Row(
                                 children: [
-                                  GestureDetector(
-                                    onLongPressStart: (_) {
-                                      _startDecreasing();
+                                  StepButton(
+                                    icon: Icons.remove,
+                                    color: Colors.grey[200]!,
+                                    onTap: () {
+                                      if (quantity > 1)
+                                        setState(() => quantity--);
                                     },
-                                    onLongPressEnd: (_) {
-                                      _stopTimer();
-                                    },
-                                    child: IconButton(
-                                      style: IconButton.styleFrom(
-                                        backgroundColor: Colors.grey[300],
-                                        shadowColor: Colors.black,
-                                        padding: EdgeInsets.all(5),
-                                        shape: CircleBorder(),
-                                      ),
-                                      onPressed: () {
-                                        if (quantity > 1) {
-                                          setState(() => quantity--);
-                                        }
-                                      },
-                                      icon: Icon(Icons.remove, size: 20),
-                                    ),
+                                    onLongPressStart: () => startTimer(_decreaseQuantity),
+                                    onLongPressEnd: stopTimer,
                                   ),
-                                  SizedBox(width: 10),
                                   Container(
+                                    width: 60,
                                     alignment: Alignment.center,
-                                    width: 100.0,
-                                    decoration: BoxDecoration(
-                                      border: Border(bottom: BorderSide()),
-                                    ),
                                     child: Text(
                                       '$quantity',
-                                      style: TextStyle(fontSize: 20),
-                                    ),
-                                  ),
-                                  SizedBox(width: 10),
-                                  GestureDetector(
-                                    onLongPressStart: (_) {
-                                      _startIncreasing();
-                                    },
-                                    onLongPressEnd: (_) {
-                                      _stopTimer();
-                                    },
-                                    child: IconButton(
-                                      style: IconButton.styleFrom(
-                                        backgroundColor: Colors.amber,
-                                        padding: EdgeInsets.all(5),
-                                        shape: CircleBorder(),
+                                      style: const TextStyle(
+                                        fontSize: 22,
+                                        fontWeight: FontWeight.bold,
                                       ),
-                                      onPressed: () {
-                                        setState(() => quantity++);
-                                      },
-                                      icon: Icon(Icons.add, size: 20),
                                     ),
                                   ),
-                                  SizedBox(width: 10),
+                                  StepButton(
+                                    icon: Icons.add,
+                                    color: Colors.amber,
+                                    onTap: () => setState(() => quantity++),
+                                    onLongPressStart: () => startTimer(_increaseQuantity),
+                                    onLongPressEnd: stopTimer,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  // Badge Satuan
                                   Container(
-                                    padding: EdgeInsets.symmetric(
-                                      horizontal: 20,
-                                      vertical: 10,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 6,
                                     ),
                                     decoration: BoxDecoration(
-                                      border: Border.all(color: Colors.amber),
-                                      borderRadius: BorderRadius.circular(6),
+                                      color: Colors.amber.shade50,
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
+                                        color: Colors.amber.shade200,
+                                      ),
                                     ),
-                                    child: Text(
+                                    child: const Text(
                                       'PCS',
                                       style: TextStyle(
+                                        fontSize: 12,
                                         fontWeight: FontWeight.bold,
+                                        color: Colors.orange,
                                       ),
                                     ),
                                   ),
@@ -454,38 +468,61 @@ class _ProductModalWidgetState extends State<ProductModalWidget> {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          SizedBox(height: 20),
+                          const SizedBox(height: 24),
+                          // Header Section
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Text(
-                                "Pilih Varian ( $totalSelectedProps / ${(widget.maxProduk ?? 0) * quantity} )",
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
+                              RichText(
+                                text: TextSpan(
+                                  text: "Pilih Varian ",
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.black87,
+                                  ),
+                                  children: [
+                                    TextSpan(
+                                      text:
+                                          "( $totalSelectedProps / ${(widget.maxProduk ?? 0) * quantity} )",
+                                      style: TextStyle(
+                                        color:
+                                            totalSelectedProps ==
+                                                (widget.maxProduk! * quantity)
+                                            ? Colors.green.shade700
+                                            : Colors.orange.shade700,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
-                              GestureDetector(
-                                onTap: resetVariants,
-                                child: Text(
+                              TextButton.icon(
+                                onPressed: resetVariants,
+                                icon: const Icon(
+                                  Icons.refresh,
+                                  size: 18,
+                                  color: Colors.red,
+                                ),
+                                label: const Text(
                                   "Reset",
-                                  style: TextStyle(
-                                    color: Colors.red,
-                                    fontSize: 16,
-                                  ),
+                                  style: TextStyle(color: Colors.red),
                                 ),
                               ),
                             ],
                           ),
-                          SizedBox(height: 12),
+                          const SizedBox(height: 12),
+
+                          // Chips Wrap
                           Wrap(
-                            spacing: 10,
-                            runSpacing: 10,
+                            spacing: 12,
+                            runSpacing: 12,
                             children: widget.props!.map((e) {
                               final id = e["id"];
-                              final propsQuantity = selectedProps[id] ?? 0;
+                              final int propsQuantity = selectedProps[id] ?? 0;
+                              final bool isSelected = propsQuantity > 0;
 
-                              // kondisi disable jika batas penuh
+                              // Kondisi disable: sudah mencapai batas MAKSIMAL
                               final bool isDisabled =
                                   totalSelectedProps >=
                                   (widget.maxProduk ?? 0) * quantity;
@@ -494,17 +531,30 @@ class _ProductModalWidgetState extends State<ProductModalWidget> {
                                 onTap: isDisabled
                                     ? null
                                     : () => onTapVariant(e),
-                                child: Container(
-                                  padding: EdgeInsets.symmetric(
-                                    horizontal: 22,
-                                    vertical: 12,
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 200),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 10,
                                   ),
                                   decoration: BoxDecoration(
-                                    color: propsQuantity > 0
+                                    // Warna background berubah berdasarkan status
+                                    color: isSelected
                                         ? Colors.amber
-                                        : Colors.white,
-                                    borderRadius: BorderRadius.circular(30),
-                                    border: Border.all(color: Colors.amber),
+                                        : (isDisabled
+                                              ? Colors.grey.shade100
+                                              : Colors.white),
+                                    borderRadius: BorderRadius.circular(
+                                      12,
+                                    ), // Menggunakan Rounded tipis agar lebih modern
+                                    border: Border.all(
+                                      color: isSelected
+                                          ? Colors.amber.shade700
+                                          : (isDisabled
+                                                ? Colors.grey.shade300
+                                                : Colors.amber.shade200),
+                                      width: 1.5,
+                                    ),
                                   ),
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
@@ -512,27 +562,30 @@ class _ProductModalWidgetState extends State<ProductModalWidget> {
                                       Text(
                                         e["title"],
                                         style: TextStyle(
-                                          color: Colors.black,
-                                          fontWeight: FontWeight.bold,
+                                          color: isSelected
+                                              ? Colors.black
+                                              : (isDisabled
+                                                    ? Colors.grey.shade400
+                                                    : Colors.black87),
+                                          fontWeight: isSelected
+                                              ? FontWeight.bold
+                                              : FontWeight.w500,
                                         ),
                                       ),
-                                      if (propsQuantity > 0) ...[
-                                        SizedBox(width: 10),
+                                      if (isSelected) ...[
+                                        const SizedBox(width: 8),
                                         Container(
-                                          padding: EdgeInsets.symmetric(
-                                            horizontal: 8,
-                                            vertical: 3,
-                                          ),
-                                          decoration: BoxDecoration(
+                                          padding: const EdgeInsets.all(4),
+                                          decoration: const BoxDecoration(
                                             color: Colors.white,
-                                            borderRadius: BorderRadius.circular(
-                                              12,
-                                            ),
+                                            shape: BoxShape.circle,
                                           ),
                                           child: Text(
                                             propsQuantity.toString(),
-                                            style: TextStyle(
+                                            style: const TextStyle(
+                                              fontSize: 10,
                                               fontWeight: FontWeight.bold,
+                                              color: Colors.orange,
                                             ),
                                           ),
                                         ),
@@ -543,80 +596,128 @@ class _ProductModalWidgetState extends State<ProductModalWidget> {
                               );
                             }).toList(),
                           ),
-                          SizedBox(height: 20),
+                          const SizedBox(height: 20),
                         ],
                       ),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Divider(height: 30),
-                        // Diskon
-                        Text(
+                        const Divider(height: 40, thickness: 1),
+                        const Text(
                           'Berikan Diskon',
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 16,
+                            color: Colors.black87,
                           ),
                         ),
-                        SizedBox(height: 8),
+                        const SizedBox(height: 12),
                         Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            // Input Field
                             Expanded(
                               child: TextField(
                                 controller: diskonController,
                                 keyboardType: TextInputType.number,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                ),
                                 decoration: InputDecoration(
-                                  hintText: 'Masukkan diskon',
+                                  hintText: '0',
+                                  prefixText: selectedUnit ? null : 'Rp ',
+                                  suffixText: selectedUnit ? '%' : null,
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 16,
+                                  ),
+                                  filled: true,
+                                  fillColor: Colors.grey[50],
                                   border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.all(
-                                      Radius.circular(10),
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide(
+                                      color: Colors.grey.shade300,
+                                    ),
+                                  ),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide(
+                                      color: Colors.grey.shade300,
+                                    ),
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: const BorderSide(
+                                      color: Colors.amber,
+                                      width: 2,
                                     ),
                                   ),
                                 ),
+                                onChanged: (value) {
+                                  // Tambahkan logika validasi di sini jika perlu
+                                  setState(() {});
+                                },
                               ),
                             ),
-                            SizedBox(width: 8),
+                            const SizedBox(width: 12),
+
+                            // Unit Selector (Rp / %)
                             ToggleButtons(
-                              isSelected: [
-                                selectedUnit == false,
-                                selectedUnit == true,
-                              ],
+                              isSelected: [!selectedUnit, selectedUnit],
                               onPressed: (int index) {
                                 setState(() {
-                                  selectedUnit = index == 0 ? false : true;
+                                  selectedUnit = index == 1;
+                                  // Opsional: Clear controller saat ganti tipe agar tidak membingungkan
+                                  // diskonController.clear();
                                 });
                               },
-                              borderRadius: BorderRadius.circular(5),
-                              color: Colors.black,
-                              selectedColor: Colors.white,
-                              selectedBorderColor: Colors.amber,
+                              borderRadius: BorderRadius.circular(12),
+                              constraints: const BoxConstraints(
+                                minHeight: 54,
+                                minWidth: 60,
+                              ),
                               fillColor: Colors.amber,
-                              children: [
-                                Padding(
-                                  padding: EdgeInsets.symmetric(
-                                    horizontal: 17.0,
-                                    vertical: 17.0,
-                                  ),
-                                  child: Text(
-                                    'Rp',
-                                    style: TextStyle(color: Colors.black),
+                              selectedColor: Colors.black,
+                              color: Colors.grey[600],
+                              selectedBorderColor: Colors.amber,
+                              borderColor: Colors.grey[300],
+                              children: const [
+                                Text(
+                                  'Rp',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
                                   ),
                                 ),
-                                Padding(
-                                  padding: EdgeInsets.symmetric(
-                                    horizontal: 17.0,
-                                    vertical: 17.0,
-                                  ),
-                                  child: Text(
-                                    '%',
-                                    style: TextStyle(color: Colors.black),
+                                Text(
+                                  '%',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
                                   ),
                                 ),
                               ],
                             ),
                           ],
                         ),
-                        SizedBox(height: 16),
+
+                        // Preview Potongan Harga (Visual Feedback)
+                        if (diskonController.text.isNotEmpty &&
+                            diskonController.text != '0')
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8, left: 4),
+                            child: Text(
+                              selectedUnit
+                                  ? "Hemat ${convertIDR((widget.price * quantity) * (double.tryParse(diskonController.text) ?? 0) / 100)}"
+                                  : "Potongan harga diterapkan",
+                              style: TextStyle(
+                                color: Colors.green[700],
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        const SizedBox(height: 20),
                       ],
                     ),
                   ],
@@ -628,4 +729,46 @@ class _ProductModalWidgetState extends State<ProductModalWidget> {
       ),
     );
   }
+
+  Widget _buildSaveButton() {
+    // Hitung status validasi
+    bool isPropsValid =
+        widget.maxProduk == null ||
+        widget.maxProduk == 0 ||
+        totalSelectedProps == (widget.maxProduk! * quantity);
+
+    Color btnColor = isPropsValid ? Colors.amber : Colors.grey.shade300;
+
+    return ElevatedButton(
+      style: ElevatedButton.styleFrom(
+        backgroundColor: btnColor,
+        foregroundColor: Colors.black,
+        elevation: 0,
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+      onPressed: () {
+        // 1. Cek Shift
+        if (hasShift == false) {
+          // if (hasShift == true) {
+          _showWarningShift();
+          return;
+        }
+
+        // 2. Cek Validasi Produk (Topping/Props)
+        if (!isPropsValid) {
+          // Opsional: Beri toast/snackbar "Pilihan belum lengkap"
+          return;
+        }
+
+        // 3. Eksekusi
+        savedToCart();
+      },
+      child: const Text(
+        'Simpan',
+        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+      ),
+    );
+  }
+
 }
