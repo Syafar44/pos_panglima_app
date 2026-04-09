@@ -76,6 +76,7 @@ class _LaporanPageState extends State<LaporanPage> {
         shiftId = result;
       });
     } catch (e) {
+      if (!mounted) return;
       showDialog(
         context: context,
         builder: (context) => ModalHandling(
@@ -110,11 +111,11 @@ class _LaporanPageState extends State<LaporanPage> {
         isLoadingData = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         inventoryIsEmpty = true;
         isLoadingData = false;
       });
-      debugPrint("Gagal ambil data laporan: $e");
       debugPrint("Gagal ambil data laporan: $e");
     }
   }

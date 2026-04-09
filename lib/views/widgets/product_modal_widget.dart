@@ -131,9 +131,11 @@ class _ProductModalWidgetState extends State<ProductModalWidget>
 
     try {
       await cartService.postCart(payload);
+      if (!mounted) return;
       Navigator.of(context).pop();
       widget.onSaved();
     } on DioException catch (e) {
+      if (!mounted) return;
       final String message = e.response?.data['message'] ?? 'Terjadi kesalahan';
 
       if (message.contains('insufficient_stock')) {
@@ -176,6 +178,7 @@ class _ProductModalWidgetState extends State<ProductModalWidget>
 
   Future<void> _loadShiftStatus() async {
     final result = await ShiftStorageService.hasActiveShift();
+    if (!mounted) return;
     setState(() {
       hasShift = result;
     });
@@ -218,19 +221,21 @@ class _ProductModalWidgetState extends State<ProductModalWidget>
                 padding: const EdgeInsets.symmetric(
                   vertical: 16.0,
                   horizontal: 20.0,
-                ), // Padding disesuaikan agar lebih proporsional
+                ),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   border: Border(
                     top: BorderSide(color: Colors.grey.shade200, width: 1.5),
                   ),
-                  borderRadius: BorderRadius.only(
+                  borderRadius: const BorderRadius.only(
                     topLeft: Radius.circular(20),
                     topRight: Radius.circular(20),
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.5),
+                      color: Colors.black.withOpacity(
+                        0.3,
+                      ), // Diperhalus dari 0.5 ke 0.05 agar lebih modern
                       blurRadius: 10,
                       offset: const Offset(0, -4),
                     ),
@@ -239,33 +244,57 @@ class _ProductModalWidgetState extends State<ProductModalWidget>
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    // Sisi Kiri: Info Produk
+                    // Sisi Kiri: Tombol Close + Info Produk
                     Expanded(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      child: Row(
                         children: [
-                          Text(
-                            widget.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 18,
+                          // TOMBOL X MODERN
+                          GestureDetector(
+                            onTap: () => Navigator.of(context).pop(),
+                            child: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: Colors.grey.shade100,
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                Icons.close_rounded,
+                                size: 20,
+                                color: Colors.grey.shade800,
+                              ),
                             ),
                           ),
-                          Text(
-                            widget.category,
-                            style: TextStyle(
-                              color: Colors.grey[600],
-                              fontSize: 13,
+                          const SizedBox(width: 16),
+                          // Info Produk
+                          Expanded(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  widget.title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 18,
+                                  ),
+                                ),
+                                Text(
+                                  widget.category,
+                                  style: TextStyle(
+                                    color: Colors.grey[600],
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ],
                       ),
                     ),
 
-                    // Sisi Kanan: Harga & Tombol
+                    // Sisi Kanan: Harga & Tombol Simpan
                     Row(
                       children: [
                         Column(
@@ -296,6 +325,7 @@ class _ProductModalWidgetState extends State<ProductModalWidget>
                   ],
                 ),
               ),
+
               SizedBox(height: 16),
               Padding(
                 padding: EdgeInsets.all(20.0),
@@ -411,7 +441,8 @@ class _ProductModalWidgetState extends State<ProductModalWidget>
                                       if (quantity > 1)
                                         setState(() => quantity--);
                                     },
-                                    onLongPressStart: () => startTimer(_decreaseQuantity),
+                                    onLongPressStart: () =>
+                                        startTimer(_decreaseQuantity),
                                     onLongPressEnd: stopTimer,
                                   ),
                                   Container(
@@ -429,7 +460,8 @@ class _ProductModalWidgetState extends State<ProductModalWidget>
                                     icon: Icons.add,
                                     color: Colors.amber,
                                     onTap: () => setState(() => quantity++),
-                                    onLongPressStart: () => startTimer(_increaseQuantity),
+                                    onLongPressStart: () =>
+                                        startTimer(_increaseQuantity),
                                     onLongPressEnd: stopTimer,
                                   ),
                                   const SizedBox(width: 12),
@@ -770,5 +802,4 @@ class _ProductModalWidgetState extends State<ProductModalWidget>
       ),
     );
   }
-
 }

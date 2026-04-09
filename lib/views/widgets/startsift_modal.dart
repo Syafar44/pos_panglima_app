@@ -61,6 +61,7 @@ class _StartsiftModalState extends State<StartsiftModal> {
         isLoadingProfile = false;
       });
     } on DioException catch (e) {
+      if (!mounted) return;
       isLoadingProfile = false;
       debugPrint('error shift: ${e.response}');
     }
@@ -122,6 +123,7 @@ class _StartsiftModalState extends State<StartsiftModal> {
         MaterialPageRoute(builder: (_) => WidgetTree()),
       );
     } catch (e) {
+      if (!mounted) return;
       showDialog(
         context: context,
         builder: (context) {

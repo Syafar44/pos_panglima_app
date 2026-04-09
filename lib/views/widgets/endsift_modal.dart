@@ -60,6 +60,7 @@ class _EndsiftModalState extends State<EndsiftModal> {
         isLoadingProfile = false;
       });
     } catch (e) {
+      if (!mounted) return;
       isLoadingProfile = false;
       showDialog(
         context: context,
@@ -113,6 +114,7 @@ class _EndsiftModalState extends State<EndsiftModal> {
         reportData = response.data['data'] ?? {};
       });
     } catch (e) {
+      if (!mounted) return;
       debugPrint('Error fetching report data: $e');
     }
   }
@@ -407,6 +409,7 @@ class _EndsiftModalState extends State<EndsiftModal> {
         (route) => false,
       );
     } on DioException catch (e) {
+      if (!mounted) return;
       debugPrint('DioException: $e');
       showDialog(
         context: context,

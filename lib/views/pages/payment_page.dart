@@ -385,6 +385,7 @@ class _PaymentPageState extends State<PaymentPage> {
         isLoadingUserId = false;
       });
     } catch (e) {
+      if (!mounted) return;
       isLoadingUserId = false;
       debugPrint("Gagal ambil user ID: $e");
     }
@@ -401,6 +402,7 @@ class _PaymentPageState extends State<PaymentPage> {
       );
       setState(() => isLoadingMethod = false);
     } catch (e) {
+      if (!mounted) return;
       debugPrint("Error fetching methods: $e");
     }
   }

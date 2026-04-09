@@ -52,6 +52,7 @@ class _InventoryPageState extends State<InventoryPage> {
         isLoadingCustomerId = false;
       });
     } catch (e) {
+      if (!mounted) return;
       isLoadingCustomerId = false;
       showDialog(
         context: context,
@@ -80,6 +81,7 @@ class _InventoryPageState extends State<InventoryPage> {
             .length;
       });
     } catch (e) {
+      if (!mounted) return;
       inventoryIsEmpty = true;
     }
   }
