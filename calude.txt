@@ -1,0 +1,22 @@
+buatkan sebuah file issue.md di root project berisi catatan perbaikan serta perbaikan apa saja yang musti implementasikan oleh junior programmer atau ai model yang lebih murah.
+
+bagi perbaikannya sesuai dengan folder dan file yang ada
+
+jelaskan tahapan-tahapan yang harus dilakukan untuk mengimplementasikan perbaikan tersebut, anggap nanti yang mengimplementasikan adalah junior programmer atau model ai yang lebih murah
+
+
+
+
+
+buatkan branch fix/issue-high-priority, 
+
+link issuenya :
+
+https://github.com/Syafar44/pos_panglima_app/issues/1
+https://github.com/Syafar44/pos_panglima_app/issues/2
+https://github.com/Syafar44/pos_panglima_app/issues/3
+https://github.com/Syafar44/pos_panglima_app/issues/4
+https://github.com/Syafar44/pos_panglima_app/issues/5
+https://github.com/Syafar44/pos_panglima_app/issues/6
+
+lalu buat PR di github dan selesiakan issue nya di pr tersebut

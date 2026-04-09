@@ -62,11 +62,18 @@ Color secondColor(String name) {
   )!; // 0.0 = sama dengan base, 1.0 = putih
 }
 
-String formatDateTime(String isoDate) {
+String formatDate(String isoDate) {
   if (isoDate.isEmpty) return '-';
 
   final dateTime = DateTime.parse(isoDate).toLocal();
 
   final formatter = DateFormat('dd MMM yyyy', 'en_US');
+  return formatter.format(dateTime);
+}
+
+String formatDateTime(String isoDate) {
+  if (isoDate.isEmpty) return '-';
+  final dateTime = DateTime.parse(isoDate);
+  final formatter = DateFormat('dd MMM yyyy HH:mm', 'en_US');
   return formatter.format(dateTime);
 }

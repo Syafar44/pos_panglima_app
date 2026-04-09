@@ -1,12 +1,18 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:pos_panglima_app/services/auth_service.dart';
+import 'package:pos_panglima_app/services/helper/dio_client.dart';
+import 'package:pos_panglima_app/services/report_service.dart';
+import 'package:pos_panglima_app/services/storage/shift_storage_service.dart';
 import 'package:pos_panglima_app/utils/convert.dart';
+import 'package:pos_panglima_app/utils/modal_handling.dart';
+import 'package:pos_panglima_app/utils/skeleton_loader.dart';
 
 List<Map<String, dynamic>> laporanOutlet = [
   {'name': 'Penerimaan Penjualan', 'page': 1},
   {'name': 'Penjualan per Tipe Penjualan', 'page': 2},
   {'name': 'Penjualan Barang per Pelanggan', 'page': 3},
   {'name': 'Penjualan per Barang ', 'page': 4},
-  {'name': 'Return Penjualan per Barang', 'page': 5},
 ];
 
 List<Map<String, dynamic>> laporanKaryawan = [
@@ -45,111 +51,83 @@ class LaporanPage extends StatefulWidget {
 
 class _LaporanPageState extends State<LaporanPage> {
   int numberPage = 1;
+  final apiClient = ApiClient();
+  late final AuthService authService;
+  late final ReportService reportService;
+  int? shiftId;
+  bool isLoadingCustomerId = true;
+  bool isLoadingData = true;
+  bool inventoryIsEmpty = false;
+  Map<String, dynamic> reportData = {};
+
+  @override
+  void initState() {
+    super.initState();
+    authService = AuthService(apiClient.dio);
+    reportService = ReportService(apiClient.dio);
+    getShiftId();
+  }
+
+  Future<void> getShiftId() async {
+    try {
+      final result = await ShiftStorageService.getShiftId();
+      await getData(result);
+      setState(() {
+        shiftId = result;
+      });
+    } catch (e) {
+      showDialog(
+        context: context,
+        builder: (context) => ModalHandling(
+          type: 'danger',
+          title: 'Gagal memuat data pengguna',
+          description:
+              'Terjadi kendala saat mengambil data pengguna. Mohon periksa koneksi atau coba kembali.',
+        ),
+      );
+    }
+  }
+
+  Future<void> getData(shiftId) async {
+    setState(() {
+      isLoadingData = true;
+      inventoryIsEmpty = false;
+      reportData = {};
+    });
+    try {
+      dynamic response;
+      if (numberPage == 1) {
+        response = await reportService.getPenerimaan(shiftId);
+      } else if (numberPage == 2) {
+        response = await reportService.getPenjualan(shiftId);
+      } else if (numberPage == 3) {
+        response = await reportService.getPelanggan(shiftId);
+      } else if (numberPage == 4) {
+        response = await reportService.getBarang(shiftId);
+      }
+      setState(() {
+        reportData = response.data['data'] ?? {};
+        isLoadingData = false;
+      });
+    } catch (e) {
+      setState(() {
+        inventoryIsEmpty = true;
+        isLoadingData = false;
+      });
+      debugPrint("Gagal ambil data laporan: $e");
+      debugPrint("Gagal ambil data laporan: $e");
+    }
+  }
+
+  void _onChangePage(int page) {
+    setState(() => numberPage = page);
+    if (shiftId != null) getData(shiftId);
+  }
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
-        // Expanded(
-        //   flex: 1,
-        //   child: Container(
-        //     decoration: BoxDecoration(
-        //       border: Border(right: BorderSide(color: Colors.black26)),
-        //     ),
-        //     child: ListView(
-        //       children: [
-        //         ExpansionTile(
-        //           initiallyExpanded: true,
-        //           title: Text("Laporan Outlet"),
-        //           backgroundColor: Colors.grey[200],
-        //           children: laporanOutlet.map((e) {
-        //             return Material(
-        //               color: Colors.white,
-        //               child: InkWell(
-        //                 onTap: () {
-        //                   setState(() {
-        //                     numberPage = e['page'];
-        //                   });
-        //                 },
-        //                 child: Container(
-        //                   decoration: BoxDecoration(
-        //                     border: Border(
-        //                       top: BorderSide(color: Colors.black54),
-        //                     ),
-        //                   ),
-        //                   alignment: AlignmentGeometry.centerLeft,
-        //                   padding: EdgeInsets.symmetric(
-        //                     vertical: 20.0,
-        //                     horizontal: 10.0,
-        //                   ),
-        //                   child: Text(e['name']),
-        //                 ),
-        //               ),
-        //             );
-        //           }).toList(),
-        //         ),
-        //         ExpansionTile(
-        //           title: Text("Laporan Karyawan"),
-        //           backgroundColor: Colors.grey[200],
-        //           children: laporanKaryawan.map((e) {
-        //             return Material(
-        //               color: Colors.white,
-        //               child: InkWell(
-        //                 onTap: () {
-        //                   setState(() {
-        //                     numberPage = e['page'];
-        //                   });
-        //                 },
-        //                 child: Container(
-        //                   decoration: BoxDecoration(
-        //                     border: Border(
-        //                       top: BorderSide(color: Colors.black54),
-        //                     ),
-        //                   ),
-        //                   alignment: AlignmentGeometry.centerLeft,
-        //                   padding: EdgeInsets.symmetric(
-        //                     vertical: 20.0,
-        //                     horizontal: 10.0,
-        //                   ),
-        //                   child: Text(e['name']),
-        //                 ),
-        //               ),
-        //             );
-        //           }).toList(),
-        //         ),
-        //         ExpansionTile(
-        //           title: Text("Laporan Taget Penjualan"),
-        //           backgroundColor: Colors.grey[200],
-        //           children: laporanTarget.map((e) {
-        //             return Material(
-        //               color: Colors.white,
-        //               child: InkWell(
-        //                 onTap: () {
-        //                   setState(() {
-        //                     numberPage = e['page'];
-        //                   });
-        //                 },
-        //                 child: Container(
-        //                   decoration: BoxDecoration(
-        //                     border: Border(
-        //                       top: BorderSide(color: Colors.black54),
-        //                     ),
-        //                   ),
-        //                   alignment: AlignmentGeometry.centerLeft,
-        //                   padding: EdgeInsets.symmetric(
-        //                     vertical: 20.0,
-        //                     horizontal: 10.0,
-        //                   ),
-        //                   child: Text(e['name']),
-        //                 ),
-        //               ),
-        //             );
-        //           }).toList(),
-        //         ),
-        //       ],
-        //     ),
-        //   ),
-        // ),
         Expanded(
           flex: 1,
           child: Container(
@@ -167,406 +145,628 @@ class _LaporanPageState extends State<LaporanPage> {
                   items: laporanOutlet,
                   initiallyExpanded: true,
                 ),
-                _buildExpansionCategory(
-                  title: "Laporan Karyawan",
-                  icon: Icons.people_alt_rounded,
-                  items: laporanKaryawan,
-                ),
-                _buildExpansionCategory(
-                  title: "Target Penjualan",
-                  icon: Icons.track_changes_rounded,
-                  items: laporanTarget,
-                ),
               ],
             ),
           ),
         ),
+
         Expanded(
           flex: 2,
-          child: Container(
-            child: numberPage == 1
-                ? penerimaanPenjualan()
-                : numberPage == 2
-                ? penjualanperTipePenjualan()
-                : numberPage == 3
-                ? penjualanbarangPerPelanggan()
-                : Center(child: Text('Comming Soon')),
-          ),
+          child: isLoadingData
+              ? Padding(
+                  padding: const EdgeInsets.all(24.0),
+                  child: SkeletonLoader.detailLaporanSkeleton(),
+                )
+              : inventoryIsEmpty
+              ? _buildEmptyState()
+              : _buildPageContent(),
         ),
       ],
     );
   }
 
-  // Widget penerimaanPenjualan() {
-  //   return Column(
-  //     children: [
-  //       LayoutBuilder(
-  //         builder: (context, constraints) {
-  //           return Container(
-  //             width: constraints.maxWidth,
-  //             decoration: BoxDecoration(
-  //               border: Border(
-  //                 bottom: BorderSide(color: Colors.black26),
-  //                 top: BorderSide(color: Colors.black26),
-  //               ),
-  //             ),
-  //             child: Theme(
-  //               data: Theme.of(context).copyWith(
-  //                 colorScheme: Theme.of(context).colorScheme.copyWith(
-  //                   surface: Colors.white,
-  //                   surfaceContainer: Colors.white,
-  //                   onSurface: Colors.black,
-  //                 ),
-  //               ),
-  //               child: DropdownMenu<String>(
-  //                 width: constraints.maxWidth,
-  //                 textStyle: TextStyle(fontWeight: FontWeight.bold),
-  //                 hintText: 'Pilih Tanggal Laporan',
-  //                 leadingIcon: Icon(Icons.calendar_month),
-  //                 // controller: pelangganController,
-  //                 enableFilter: true,
-  //                 enableSearch: true,
-  //                 inputDecorationTheme: const InputDecorationTheme(
-  //                   border: OutlineInputBorder(
-  //                     borderRadius: BorderRadius.zero,
-  //                     borderSide: BorderSide.none,
-  //                   ),
-  //                   filled: true,
-  //                   fillColor: Colors.white,
-  //                   contentPadding: EdgeInsets.symmetric(horizontal: 10.0),
-  //                 ),
-  //                 dropdownMenuEntries: [
-  //                   DropdownMenuEntry<String>(
-  //                     leadingIcon: Container(
-  //                       padding: EdgeInsets.all(7),
-  //                       decoration: BoxDecoration(
-  //                         borderRadius: BorderRadius.all(Radius.circular(13.0)),
-  //                         color: Colors.grey[300],
-  //                       ),
-  //                       child: Text(
-  //                         'Hari Ini',
-  //                         style: TextStyle(fontWeight: FontWeight.bold),
-  //                       ),
-  //                     ),
-  //                     value: '1h',
-  //                     label: '28 November 2025',
-  //                   ),
-  //                   DropdownMenuEntry<String>(
-  //                     leadingIcon: Container(
-  //                       padding: EdgeInsets.all(7),
-  //                       decoration: BoxDecoration(
-  //                         borderRadius: BorderRadius.all(Radius.circular(13.0)),
-  //                         color: Colors.grey[300],
-  //                       ),
-  //                       child: Text(
-  //                         '7 Hari',
-  //                         style: TextStyle(fontWeight: FontWeight.bold),
-  //                       ),
-  //                     ),
-  //                     value: '7h',
-  //                     label: '21 November 2025 - 28 November 2025',
-  //                   ),
-  //                   DropdownMenuEntry<String>(
-  //                     leadingIcon: Container(
-  //                       padding: EdgeInsets.all(7),
-  //                       decoration: BoxDecoration(
-  //                         borderRadius: BorderRadius.all(Radius.circular(13.0)),
-  //                         color: Colors.grey[300],
-  //                       ),
-  //                       child: Text(
-  //                         '30 Hari',
-  //                         style: TextStyle(fontWeight: FontWeight.bold),
-  //                       ),
-  //                     ),
-  //                     value: '30h',
-  //                     label: '29 Oktober 2025 - 28 November 2025',
-  //                   ),
-  //                 ],
-  //                 onSelected: (value) {
-  //                   // setState(() {
-  //                   //   category = value;
-  //                   // });
-  //                 },
-  //               ),
-  //             ),
-  //           );
-  //         },
-  //       ),
-  //       Container(
-  //         padding: EdgeInsets.all(20),
-  //         child: Column(
-  //           children: [
-  //             Row(
-  //               spacing: 20.0,
-  //               children: [
-  //                 Expanded(
-  //                   child: Container(
-  //                     padding: EdgeInsets.all(20.0),
-  //                     decoration: BoxDecoration(
-  //                       color: Colors.grey[300],
-  //                       border: Border.all(color: Colors.black26),
-  //                       borderRadius: BorderRadius.all(Radius.circular(10.0)),
-  //                     ),
-  //                     child: Column(
-  //                       children: [
-  //                         Text('Total Penerimaan'),
-  //                         Text(
-  //                           convertIDR(76000),
-  //                           style: TextStyle(
-  //                             fontSize: 21.0,
-  //                             fontWeight: FontWeight.bold,
-  //                           ),
-  //                         ),
-  //                       ],
-  //                     ),
-  //                   ),
-  //                 ),
-  //                 Expanded(
-  //                   child: Container(
-  //                     padding: EdgeInsets.all(20.0),
-  //                     decoration: BoxDecoration(
-  //                       color: Colors.grey[300],
-  //                       border: Border.all(color: Colors.black26),
-  //                       borderRadius: BorderRadius.all(Radius.circular(10.0)),
-  //                     ),
-  //                     child: Column(
-  //                       children: [
-  //                         Text('Jumlah Penerimaan'),
-  //                         Text(
-  //                           "20",
-  //                           style: TextStyle(
-  //                             fontSize: 21.0,
-  //                             fontWeight: FontWeight.bold,
-  //                           ),
-  //                         ),
-  //                       ],
-  //                     ),
-  //                   ),
-  //                 ),
-  //               ],
-  //             ),
-  //           ],
-  //         ),
-  //       ),
-  //       Padding(
-  //         padding: const EdgeInsets.symmetric(horizontal: 20.0),
-  //         child: Column(
-  //           spacing: 20.0,
-  //           children: [
-  //             InkWell(
-  //               onTap: () {
-  //                 showDialog(
-  //                   context: context,
-  //                   builder: (context) {
-  //                     return Dialog(
-  //                       shape: RoundedRectangleBorder(
-  //                         borderRadius: BorderRadius.circular(16),
-  //                       ),
-  //                       backgroundColor: Colors.white,
-  //                       child: modalLIst(),
-  //                     );
-  //                   },
-  //                 );
-  //               },
-  //               borderRadius: BorderRadius.all(Radius.circular(10.0)),
-  //               child: Container(
-  //                 padding: EdgeInsets.all(20.0),
-  //                 decoration: BoxDecoration(
-  //                   border: Border.all(color: Colors.black26),
-  //                   borderRadius: BorderRadius.all(Radius.circular(10.0)),
-  //                 ),
-  //                 child: Row(
-  //                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
-  //                   children: [
-  //                     Column(
-  //                       crossAxisAlignment: CrossAxisAlignment.start,
-  //                       children: [
-  //                         Text(
-  //                           'Tunai',
-  //                           style: TextStyle(
-  //                             fontSize: 16,
-  //                             fontWeight: FontWeight.bold,
-  //                           ),
-  //                         ),
-  //                         Text('10 Penerimaan'),
-  //                       ],
-  //                     ),
-  //                     Row(
-  //                       spacing: 10.0,
-  //                       children: [
-  //                         Text(
-  //                           convertIDR(7000028),
-  //                           style: TextStyle(
-  //                             fontSize: 18,
-  //                             fontWeight: FontWeight.bold,
-  //                           ),
-  //                         ),
-  //                         Icon(Icons.chevron_right),
-  //                       ],
-  //                     ),
-  //                   ],
-  //                 ),
-  //               ),
-  //             ),
-  //             InkWell(
-  //               onTap: () async {
-  //               },
-  //               borderRadius: BorderRadius.all(Radius.circular(10.0)),
-  //               child: Container(
-  //                 padding: EdgeInsets.all(20.0),
-  //                 decoration: BoxDecoration(
-  //                   border: Border.all(color: Colors.black26),
-  //                   borderRadius: BorderRadius.all(Radius.circular(10.0)),
-  //                 ),
-  //                 child: Row(
-  //                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
-  //                   children: [
-  //                     Column(
-  //                       crossAxisAlignment: CrossAxisAlignment.start,
-  //                       children: [
-  //                         Text(
-  //                           'Qris',
-  //                           style: TextStyle(
-  //                             fontSize: 16,
-  //                             fontWeight: FontWeight.bold,
-  //                           ),
-  //                         ),
-  //                         Text('10 Penerimaan'),
-  //                       ],
-  //                     ),
-  //                     Row(
-  //                       spacing: 10.0,
-  //                       children: [
-  //                         Text(
-  //                           convertIDR(7000028),
-  //                           style: TextStyle(
-  //                             fontSize: 18,
-  //                             fontWeight: FontWeight.bold,
-  //                           ),
-  //                         ),
-  //                         Icon(Icons.chevron_right),
-  //                       ],
-  //                     ),
-  //                   ],
-  //                 ),
-  //               ),
-  //             ),
-  //           ],
-  //         ),
-  //       ),
-  //     ],
-  //   );
-  // }
+  Widget _buildPageContent() {
+    switch (numberPage) {
+      case 1:
+        return _buildLaporanPenerimaan();
+      case 2:
+        return _buildLaporanPenjualanTipe();
+      case 3:
+        return _buildLaporanPelanggan();
+      case 4:
+        return _buildLaporanBarang();
+      default:
+        return const Center(child: Text('Coming Soon'));
+    }
+  }
 
-  Widget penerimaanPenjualan() {
+  Widget _buildLaporanPenerimaan() {
+    final double totalPenerimaan = (reportData['total_penerimaan'] ?? 0)
+        .toDouble();
+    final int jumlahTransaksi = reportData['jumlah_transaksi'] ?? 0;
+    final List breakdown = reportData['breakdown'] ?? [];
+
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // --- FILTER TANGGAL (DROPDOWN) ---
-        LayoutBuilder(
-          builder: (context, constraints) {
-            return Container(
-              width: constraints.maxWidth,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
-              ),
-              child: Theme(
-                data: Theme.of(context).copyWith(
-                  colorScheme: Theme.of(
-                    context,
-                  ).colorScheme.copyWith(surface: Colors.white),
-                ),
-                child: DropdownMenu<String>(
-                  expandedInsets: EdgeInsets.zero,
-                  width: constraints.maxWidth,
-                  menuStyle: MenuStyle(
-                    backgroundColor: WidgetStateProperty.all(Colors.white),
-                    surfaceTintColor: WidgetStateProperty.all(
-                      Colors.white,
-                    ), // Hapus tint ungu M3
-                    shape: WidgetStateProperty.all(
-                      RoundedRectangleBorder(
-                        borderRadius: BorderRadius.only(
-                          bottomLeft: Radius.circular(12),
-                          bottomRight: Radius.circular(12),
-                        ),
-                      ),
-                    ),
-                  ),
-                  textStyle: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                  ),
-                  hintText: 'Pilih Periode Laporan',
-                  leadingIcon: Icon(
-                    Icons.calendar_today_rounded,
-                    color: Colors.amber[900],
-                    size: 20,
-                  ),
-                  inputDecorationTheme: const InputDecorationTheme(
-                    border: InputBorder.none,
-                    filled: true,
-                    fillColor: Colors.white,
-                    contentPadding: EdgeInsets.symmetric(horizontal: 16.0),
-                  ),
-                  dropdownMenuEntries: [
-                    _buildDateEntry('1h', 'Hari Ini', '28 November 2025'),
-                    _buildDateEntry('7h', '7 Hari', '21 - 28 Nov 2025'),
-                    _buildDateEntry('30h', '30 Hari', '29 Okt - 28 Nov 2025'),
-                  ],
-                  onSelected: (value) {},
-                ),
-              ),
-            );
-          },
-        ),
-
-        // --- SUMMARY CARDS (TOTAL & JUMLAH) ---
+        // _buildPeriodFilter(),
         Padding(
           padding: const EdgeInsets.all(20.0),
           child: Row(
             children: [
               _buildSummaryCard(
                 title: 'Total Penerimaan',
-                value: convertIDR(76000),
+                value: convertIDR(totalPenerimaan),
                 icon: Icons.account_balance_wallet_rounded,
                 color: Colors.amber[700]!,
               ),
               const SizedBox(width: 16),
               _buildSummaryCard(
                 title: 'Jumlah Transaksi',
-                value: '20',
+                value: '$jumlahTransaksi',
                 icon: Icons.confirmation_number_rounded,
                 color: Colors.blue[700]!,
               ),
             ],
           ),
         ),
-
-        // --- DAFTAR METODE PEMBAYARAN ---
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20.0),
           child: Column(
+            children: breakdown.map<Widget>((item) {
+              final String name = item['pos_payment_method_name'] ?? '-';
+              final int count = item['jumlah_transaksi'] ?? 0;
+              final double amount = (item['total_amount'] ?? 0).toDouble();
+              final IconData icon =
+                  name.toLowerCase().contains('cash') ||
+                      name.toLowerCase().contains('tunai')
+                  ? Icons.money_rounded
+                  : Icons.qr_code_scanner_rounded;
+
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12.0),
+                child: _buildBreakdownTile(
+                  label: name,
+                  subtitle: '$count Penerimaan',
+                  amount: amount,
+                  icon: icon,
+                  onTap: () => _showTransactionDetailModal(
+                    title: name,
+                    type: numberPage,
+                    subtitle: '$count Penerimaan',
+                    id: item['pos_payment_method_id'],
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ─── PAGE 2: PENJUALAN PER TIPE PENJUALAN ───────────────────────────────────
+
+  Widget _buildLaporanPenjualanTipe() {
+    final double totalPenjualan = (reportData['total_penjualan'] ?? 0)
+        .toDouble();
+    final int jumlahTransaksi = reportData['jumlah_transaksi'] ?? 0;
+    final List breakdown = reportData['breakdown'] ?? [];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // _buildPeriodFilter(),
+        Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Row(
             children: [
-              _buildPaymentMethodTile(
-                label: 'Tunai',
-                count: 10,
-                amount: 7000028,
-                icon: Icons.money_rounded,
-                onTap: () => _showDetailModal(),
+              _buildSummaryCard(
+                title: 'Total Penjualan',
+                value: convertIDR(totalPenjualan),
+                icon: Icons.point_of_sale_rounded,
+                color: Colors.amber[700]!,
               ),
-              const SizedBox(height: 12),
-              _buildPaymentMethodTile(
-                label: 'QRIS',
-                count: 10,
-                amount: 7000028,
-                icon: Icons.qr_code_scanner_rounded,
-                onTap: () {},
+              const SizedBox(width: 16),
+              _buildSummaryCard(
+                title: 'Jumlah Transaksi',
+                value: '$jumlahTransaksi',
+                icon: Icons.confirmation_number_rounded,
+                color: Colors.blue[700]!,
               ),
             ],
           ),
         ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20.0),
+          child: Column(
+            children: breakdown.map<Widget>((item) {
+              final String name = item['pos_order_method_name'] ?? '-';
+              final int count = item['jumlah_transaksi'] ?? 0;
+              final double amount = (item['total_amount'] ?? 0).toDouble();
+
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12.0),
+                child: _buildBreakdownTile(
+                  label: name,
+                  subtitle: '$count Transaksi',
+                  amount: amount,
+                  icon: Icons.shopping_bag_rounded,
+                  onTap: () {
+                    _showTransactionDetailModal(
+                      title: name,
+                      type: numberPage,
+                      subtitle: '$count Transaksi',
+                      id: item['pos_order_method_id'],
+                    );
+                  },
+                ),
+              );
+            }).toList(),
+          ),
+        ),
       ],
+    );
+  }
+
+  // ─── PAGE 3: PENJUALAN BARANG PER PELANGGAN ─────────────────────────────────
+
+  Widget _buildLaporanPelanggan() {
+    final double totalPenjualan = (reportData['total_penjualan'] ?? 0)
+        .toDouble();
+    final int jumlahBarang = reportData['jumlah_barang'] ?? 0;
+    final List breakdown = reportData['breakdown'] ?? [];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // _buildPeriodFilter(),
+        Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Row(
+            children: [
+              _buildSummaryCard(
+                title: 'Total Penjualan',
+                value: convertIDR(totalPenjualan),
+                icon: Icons.point_of_sale_rounded,
+                color: Colors.amber[700]!,
+              ),
+              const SizedBox(width: 16),
+              _buildSummaryCard(
+                title: 'Jumlah Barang',
+                value: '$jumlahBarang',
+                icon: Icons.inventory_2_rounded,
+                color: Colors.green[700]!,
+              ),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20.0),
+          child: Column(
+            children: breakdown.map<Widget>((item) {
+              final String name = item['customers_name'] ?? '-';
+              final int jumlahProduk = item['jumlah_produk'] ?? 0;
+              final int count = item['jumlah_transaksi'] ?? 0;
+              final double amount = (item['total_amount'] ?? 0).toDouble();
+
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12.0),
+                child: _buildBreakdownTile(
+                  label: name,
+                  subtitle: '$jumlahProduk Produk · $count Transaksi',
+                  amount: amount,
+                  icon: Icons.person_rounded,
+                  onTap: () => _showTransactionDetailModal(
+                    title: name,
+                    type: numberPage,
+                    subtitle: '$count Transaksi',
+                    id: item['customers_id'],
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ─── PAGE 4: PENJUALAN PER BARANG ───────────────────────────────────────────
+
+  Widget _buildLaporanBarang() {
+    final double totalPenjualan = (reportData['total_penjualan'] ?? 0)
+        .toDouble();
+    final int jumlahBarang = reportData['jumlah_barang'] ?? 0;
+    final List breakdown = reportData['breakdown'] ?? [];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // _buildPeriodFilter(),
+        Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Row(
+            children: [
+              _buildSummaryCard(
+                title: 'Total Penjualan',
+                value: convertIDR(totalPenjualan),
+                icon: Icons.point_of_sale_rounded,
+                color: Colors.amber[700]!,
+              ),
+              const SizedBox(width: 16),
+              _buildSummaryCard(
+                title: 'Jumlah Barang',
+                value: '$jumlahBarang',
+                icon: Icons.inventory_2_rounded,
+                color: Colors.green[700]!,
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20.0),
+            child: ListView.separated(
+              itemCount: breakdown.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 12),
+              itemBuilder: (context, index) {
+                final item = breakdown[index];
+                final String name = item['pos_menus_name'] ?? '-';
+                final int qty = item['total_qty'] ?? 0;
+                final double amount = (item['total_amount'] ?? 0).toDouble();
+
+                return _buildBreakdownTile(
+                  label: name,
+                  subtitle: '$qty Unit Terjual',
+                  amount: amount,
+                  icon: Icons.fastfood_rounded,
+                  onTap: () => _showTransactionDetailModal(
+                    title: name,
+                    type: numberPage,
+                    subtitle: '$qty Unit Terjual',
+                    id: item['pos_menus_id'],
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+        const SizedBox(height: 20),
+      ],
+    );
+  }
+
+  // ─── SHARED WIDGETS ──────────────────────────────────────────────────────────
+
+  // Widget _buildPeriodFilter() {
+  //   return LayoutBuilder(
+  //     builder: (context, constraints) {
+  //       return Container(
+  //         width: constraints.maxWidth,
+  //         decoration: BoxDecoration(
+  //           color: Colors.white,
+  //           border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
+  //         ),
+  //         child: Theme(
+  //           data: Theme.of(context).copyWith(
+  //             colorScheme: Theme.of(
+  //               context,
+  //             ).colorScheme.copyWith(surface: Colors.white),
+  //           ),
+  //           child: DropdownMenu<String>(
+  //             expandedInsets: EdgeInsets.zero,
+  //             width: constraints.maxWidth,
+  //             menuStyle: MenuStyle(
+  //               backgroundColor: WidgetStateProperty.all(Colors.white),
+  //               surfaceTintColor: WidgetStateProperty.all(Colors.white),
+  //               shape: WidgetStateProperty.all(
+  //                 RoundedRectangleBorder(
+  //                   borderRadius: BorderRadius.only(
+  //                     bottomLeft: Radius.circular(12),
+  //                     bottomRight: Radius.circular(12),
+  //                   ),
+  //                 ),
+  //               ),
+  //             ),
+  //             textStyle: const TextStyle(
+  //               fontWeight: FontWeight.bold,
+  //               fontSize: 14,
+  //             ),
+  //             hintText: 'Pilih Periode Laporan',
+  //             leadingIcon: Icon(
+  //               Icons.calendar_today_rounded,
+  //               color: Colors.amber[900],
+  //               size: 20,
+  //             ),
+  //             inputDecorationTheme: const InputDecorationTheme(
+  //               border: InputBorder.none,
+  //               filled: true,
+  //               fillColor: Colors.white,
+  //               contentPadding: EdgeInsets.symmetric(horizontal: 16.0),
+  //             ),
+  //             dropdownMenuEntries: [
+  //               _buildDateEntry('1h', 'Hari Ini', '28 November 2025'),
+  //               _buildDateEntry('7h', '7 Hari', '21 - 28 Nov 2025'),
+  //               _buildDateEntry('30h', '30 Hari', '29 Okt - 28 Nov 2025'),
+  //             ],
+  //             onSelected: (value) {},
+  //           ),
+  //         ),
+  //       );
+  //     },
+  //   );
+  // }
+
+  /// Tile generik untuk semua breakdown
+  Widget _buildBreakdownTile({
+    required String label,
+    required String subtitle,
+    required double amount,
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.all(16.0),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.grey[300]!),
+          ),
+          child: Row(
+            children: [
+              CircleAvatar(
+                backgroundColor: Colors.grey[50],
+                child: Icon(icon, color: Colors.grey[700], size: 20),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      subtitle,
+                      style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Text(
+                    convertIDR(amount),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
+                    ),
+                  ),
+                  Icon(Icons.chevron_right, color: Colors.grey[400], size: 20),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.inbox_rounded, size: 64, color: Colors.grey[300]),
+          const SizedBox(height: 16),
+          Text(
+            'Tidak ada data',
+            style: TextStyle(color: Colors.grey[500], fontSize: 16),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Coba ubah periode atau periksa koneksi',
+            style: TextStyle(color: Colors.grey[400], fontSize: 13),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future _showTransactionDetailModal({
+    required String title,
+    required int type,
+    required dynamic id,
+    required String subtitle,
+  }) {
+    return showDialog(
+      context: context,
+      builder: (context) {
+        Future<Response> fetchDetail() {
+          final int parsedId = (id is int) ? id : (id as num).toInt();
+          switch (type) {
+            case 1:
+              return reportService.getDetailPenerimaan(shiftId!, parsedId);
+            case 2:
+              return reportService.getDetailPenjualan(shiftId!, parsedId);
+            case 3:
+              return reportService.getDetailPelanggan(shiftId!, parsedId);
+            case 4:
+              return reportService.getDetailBarang(shiftId!, parsedId);
+            default:
+              throw Exception("Tipe tidak valid");
+          }
+        }
+
+        debugPrint('reportData: $reportData');
+
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          backgroundColor: Colors.white,
+          clipBehavior: Clip.antiAlias,
+          child: SizedBox(
+            width: 600.0,
+            height: MediaQuery.of(context).size.height * 0.7,
+            child: Column(
+              children: [
+                _buildModalHeader(title, subtitle),
+                Expanded(
+                  child: FutureBuilder(
+                    future: fetchDetail(),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(
+                          child: CircularProgressIndicator(
+                            color: Colors.orange,
+                          ),
+                        );
+                      }
+                      if (snapshot.hasError ||
+                          snapshot.data?.data['data'] == null) {
+                        return const Center(
+                          child: Text("Gagal memuat data atau data kosong"),
+                        );
+                      }
+
+                      final List transactions = snapshot.data!.data['data'];
+
+                      return ListView.separated(
+                        padding: EdgeInsets.zero,
+                        itemCount: transactions.length,
+                        separatorBuilder: (_, __) =>
+                            Divider(height: 1, color: Colors.grey.shade200),
+                        itemBuilder: (context, index) {
+                          final item = transactions[index];
+                          String subtitleInfo = item['users_name'] ?? '-';
+                          if (item['quantity'] != null)
+                            subtitleInfo += " • ${item['quantity']} Qty";
+                          if (item['jumlah_produk'] != null)
+                            subtitleInfo +=
+                                " • ${item['jumlah_produk']} Produk";
+                          return InkWell(
+                            onTap: () {},
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 24.0,
+                                vertical: 20.0,
+                              ),
+                              child: Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        item['document_number'] ?? '-',
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w500,
+                                          fontSize: 16.0,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        subtitleInfo,
+                                        style: TextStyle(
+                                          color: Colors.grey.shade600,
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    children: [
+                                      Text(
+                                        formatDateTime(item['created_at']),
+                                        style: TextStyle(
+                                          color: Colors.grey.shade500,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        convertIDR(
+                                          (item['total_amount'] ?? 0)
+                                              .toDouble(),
+                                        ),
+                                        style: const TextStyle(
+                                          color: Colors.orange,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 16.0,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildModalHeader(String title, dynamic subtitle) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: Colors.grey.shade300)),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 20.0,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                subtitle,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18.0,
+                  color: Colors.orange,
+                ),
+              ),
+            ],
+          ),
+          IconButton(
+            icon: const Icon(Icons.close, size: 28.0),
+            onPressed: () => Navigator.pop(context),
+          ),
+        ],
+      ),
     );
   }
 
@@ -873,468 +1073,6 @@ class _LaporanPageState extends State<LaporanPage> {
     );
   }
 
-  Widget penjualanperTipePenjualan() {
-    return Column(
-      children: [
-        LayoutBuilder(
-          builder: (context, constraints) {
-            return Container(
-              width: constraints.maxWidth,
-              decoration: BoxDecoration(
-                border: Border(
-                  bottom: BorderSide(color: Colors.black26),
-                  top: BorderSide(color: Colors.black26),
-                ),
-              ),
-              child: Theme(
-                data: Theme.of(context).copyWith(
-                  colorScheme: Theme.of(context).colorScheme.copyWith(
-                    surface: Colors.white,
-                    surfaceContainer: Colors.white,
-                    onSurface: Colors.black,
-                  ),
-                ),
-                child: DropdownMenu<String>(
-                  width: constraints.maxWidth,
-                  textStyle: TextStyle(fontWeight: FontWeight.bold),
-                  hintText: 'Pilih Tanggal Laporan',
-                  leadingIcon: Icon(Icons.calendar_month),
-                  // controller: pelangganController,
-                  enableFilter: true,
-                  enableSearch: true,
-                  inputDecorationTheme: const InputDecorationTheme(
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.zero,
-                      borderSide: BorderSide.none,
-                    ),
-                    filled: true,
-                    fillColor: Colors.white,
-                    contentPadding: EdgeInsets.symmetric(horizontal: 10.0),
-                  ),
-                  dropdownMenuEntries: [
-                    DropdownMenuEntry<String>(
-                      leadingIcon: Container(
-                        padding: EdgeInsets.all(7),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.all(Radius.circular(13.0)),
-                          color: Colors.grey[300],
-                        ),
-                        child: Text(
-                          'Hari Ini',
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                      value: '1h',
-                      label: '28 November 2025',
-                    ),
-                    DropdownMenuEntry<String>(
-                      leadingIcon: Container(
-                        padding: EdgeInsets.all(7),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.all(Radius.circular(13.0)),
-                          color: Colors.grey[300],
-                        ),
-                        child: Text(
-                          '7 Hari',
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                      value: '7h',
-                      label: '21 November 2025 - 28 November 2025',
-                    ),
-                    DropdownMenuEntry<String>(
-                      leadingIcon: Container(
-                        padding: EdgeInsets.all(7),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.all(Radius.circular(13.0)),
-                          color: Colors.grey[300],
-                        ),
-                        child: Text(
-                          '30 Hari',
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                      value: '30h',
-                      label: '29 Oktober 2025 - 28 November 2025',
-                    ),
-                  ],
-                  onSelected: (value) {
-                    // setState(() {
-                    //   category = value;
-                    // });
-                  },
-                ),
-              ),
-            );
-          },
-        ),
-        Container(
-          padding: EdgeInsets.all(20),
-          child: Column(
-            children: [
-              Row(
-                spacing: 20.0,
-                children: [
-                  Expanded(
-                    child: Container(
-                      padding: EdgeInsets.all(20.0),
-                      decoration: BoxDecoration(
-                        color: Colors.grey[300],
-                        border: Border.all(color: Colors.black26),
-                        borderRadius: BorderRadius.all(Radius.circular(10.0)),
-                      ),
-                      child: Column(
-                        children: [
-                          Text('Total Panjualan'),
-                          Text(
-                            convertIDR(2206000),
-                            style: TextStyle(
-                              fontSize: 21.0,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    child: Container(
-                      padding: EdgeInsets.all(20.0),
-                      decoration: BoxDecoration(
-                        color: Colors.grey[300],
-                        border: Border.all(color: Colors.black26),
-                        borderRadius: BorderRadius.all(Radius.circular(10.0)),
-                      ),
-                      child: Column(
-                        children: [
-                          Text('Jumlah Transaksi'),
-                          Text(
-                            '40',
-                            style: TextStyle(
-                              fontSize: 21.0,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20.0),
-          child: Column(
-            spacing: 20.0,
-            children: [
-              InkWell(
-                onTap: () {
-                  _showDetailModal();
-                },
-                borderRadius: BorderRadius.all(Radius.circular(10.0)),
-                child: Container(
-                  padding: EdgeInsets.all(20.0),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.black26),
-                    borderRadius: BorderRadius.all(Radius.circular(10.0)),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Takeaway',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          Text('10 Penerimaan'),
-                        ],
-                      ),
-                      Row(
-                        spacing: 10.0,
-                        children: [
-                          Text(
-                            convertIDR(1020028),
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          Icon(Icons.chevron_right),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              InkWell(
-                onTap: () {},
-                borderRadius: BorderRadius.all(Radius.circular(10.0)),
-                child: Container(
-                  padding: EdgeInsets.all(20.0),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.black26),
-                    borderRadius: BorderRadius.all(Radius.circular(10.0)),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Delivery',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          Text('10 Penerimaan'),
-                        ],
-                      ),
-                      Row(
-                        spacing: 10.0,
-                        children: [
-                          Text(
-                            convertIDR(1900028),
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          Icon(Icons.chevron_right),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget penjualanbarangPerPelanggan() {
-    return Column(
-      children: [
-        LayoutBuilder(
-          builder: (context, constraints) {
-            return Container(
-              width: constraints.maxWidth,
-              decoration: BoxDecoration(
-                border: Border(
-                  bottom: BorderSide(color: Colors.black26),
-                  top: BorderSide(color: Colors.black26),
-                ),
-              ),
-              child: Theme(
-                data: Theme.of(context).copyWith(
-                  colorScheme: Theme.of(context).colorScheme.copyWith(
-                    surface: Colors.white,
-                    surfaceContainer: Colors.white,
-                    onSurface: Colors.black,
-                  ),
-                ),
-                child: DropdownMenu<String>(
-                  width: constraints.maxWidth,
-                  textStyle: TextStyle(fontWeight: FontWeight.bold),
-                  hintText: 'Pilih Tanggal Laporan',
-                  leadingIcon: Icon(Icons.calendar_month),
-                  // controller: pelangganController,
-                  enableFilter: true,
-                  enableSearch: true,
-                  inputDecorationTheme: const InputDecorationTheme(
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.zero,
-                      borderSide: BorderSide.none,
-                    ),
-                    filled: true,
-                    fillColor: Colors.white,
-                    contentPadding: EdgeInsets.symmetric(horizontal: 10.0),
-                  ),
-                  dropdownMenuEntries: [
-                    DropdownMenuEntry<String>(
-                      leadingIcon: Container(
-                        padding: EdgeInsets.all(7),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.all(Radius.circular(13.0)),
-                          color: Colors.grey[300],
-                        ),
-                        child: Text(
-                          'Hari Ini',
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                      value: '1h',
-                      label: '28 November 2025',
-                    ),
-                    DropdownMenuEntry<String>(
-                      leadingIcon: Container(
-                        padding: EdgeInsets.all(7),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.all(Radius.circular(13.0)),
-                          color: Colors.grey[300],
-                        ),
-                        child: Text(
-                          '7 Hari',
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                      value: '7h',
-                      label: '21 November 2025 - 28 November 2025',
-                    ),
-                    DropdownMenuEntry<String>(
-                      leadingIcon: Container(
-                        padding: EdgeInsets.all(7),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.all(Radius.circular(13.0)),
-                          color: Colors.grey[300],
-                        ),
-                        child: Text(
-                          '30 Hari',
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                      value: '30h',
-                      label: '29 Oktober 2025 - 28 November 2025',
-                    ),
-                  ],
-                  onSelected: (value) {
-                    // setState(() {
-                    //   category = value;
-                    // });
-                  },
-                ),
-              ),
-            );
-          },
-        ),
-        Container(
-          padding: EdgeInsets.all(20),
-          child: Column(
-            children: [
-              Row(
-                spacing: 20.0,
-                children: [
-                  Expanded(
-                    child: Container(
-                      padding: EdgeInsets.all(20.0),
-                      decoration: BoxDecoration(
-                        color: Colors.grey[300],
-                        border: Border.all(color: Colors.black26),
-                        borderRadius: BorderRadius.all(Radius.circular(10.0)),
-                      ),
-                      child: Column(
-                        children: [
-                          Text('Total Penjualan'),
-                          Text(
-                            convertIDR(2000182),
-                            style: TextStyle(
-                              fontSize: 21.0,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    child: Container(
-                      padding: EdgeInsets.all(20.0),
-                      decoration: BoxDecoration(
-                        color: Colors.grey[300],
-                        border: Border.all(color: Colors.black26),
-                        borderRadius: BorderRadius.all(Radius.circular(10.0)),
-                      ),
-                      child: Column(
-                        children: [
-                          Text('Jumlah Barang'),
-                          Text(
-                            "140",
-                            style: TextStyle(
-                              fontSize: 21.0,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20.0),
-          child: Column(
-            spacing: 20.0,
-            children: [
-              InkWell(
-                onTap: () {
-                  _showDetailModal();
-                },
-                borderRadius: BorderRadius.all(Radius.circular(10.0)),
-                child: Container(
-                  padding: EdgeInsets.all(20.0),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.black26),
-                    borderRadius: BorderRadius.all(Radius.circular(10.0)),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Pelanggan Umum',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          Text('140 Produk Terjual'),
-                        ],
-                      ),
-                      Row(
-                        spacing: 10.0,
-                        children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Text(
-                                convertIDR(7000028),
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              Text('40 Transkasi'),
-                            ],
-                          ),
-                          Icon(Icons.chevron_right),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
   Widget _buildExpansionCategory({
     required String title,
     required IconData icon,
@@ -1388,7 +1126,7 @@ class _LaporanPageState extends State<LaporanPage> {
                 color: Colors.transparent,
                 child: InkWell(
                   borderRadius: BorderRadius.circular(10),
-                  onTap: () => setState(() => numberPage = e['page']),
+                  onTap: () => _onChangePage(e['page']),
                   child: Container(
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(

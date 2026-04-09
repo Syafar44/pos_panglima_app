@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:pos_panglima_app/data/notifiers.dart';
-// import 'package:hive_flutter/adapters.dart';
 import 'package:pos_panglima_app/services/bluetooth_printer_service.dart';
 import 'package:pos_panglima_app/services/camera_service.dart';
 import 'package:pos_panglima_app/services/helper/splash_screen.dart';
@@ -10,8 +9,23 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:pos_panglima_app/firebase_options.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setString(
+    'notif_title',
+    message.notification?.title ?? 'Notifikasi',
+  );
+  await prefs.setString('notif_body', message.notification?.body ?? '');
+  await prefs.setBool('notif_visible', true);
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
   await BluetoothPrinterService.requestPermissions();
 
@@ -22,6 +36,35 @@ void main() async {
   await cameraService.requestPermissionOnly();
 
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  final initialMessage = await FirebaseMessaging.instance.getInitialMessage();
+  if (initialMessage != null) {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      'notif_title',
+      initialMessage.notification?.title ?? 'Notifikasi',
+    );
+    await prefs.setString(
+      'notif_body',
+      initialMessage.notification?.body ?? '',
+    );
+    await prefs.setBool('notif_visible', true);
+  }
+
+  FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      'notif_title',
+      message.notification?.title ?? 'Notifikasi',
+    );
+    await prefs.setString('notif_body', message.notification?.body ?? '');
+    await prefs.setBool('notif_visible', true);
+
+    incomingNotifNotifier.value = {
+      'title': message.notification?.title ?? 'Notifikasi',
+      'body': message.notification?.body ?? '',
+    };
+  });
 
   FirebaseMessaging messaging = FirebaseMessaging.instance;
   await messaging.requestPermission(alert: true, badge: true, sound: true);
@@ -44,7 +87,7 @@ void main() async {
   });
 
   final prefs = await SharedPreferences.getInstance();
-  
+
   final isVisible = prefs.getBool('notif_visible') ?? false;
 
   if (isVisible) {

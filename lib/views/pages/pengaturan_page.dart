@@ -1,12 +1,17 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:device_info_plus/device_info_plus.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:network_info_plus/network_info_plus.dart';
 import 'package:pos_panglima_app/services/auth_service.dart';
 import 'package:pos_panglima_app/services/bluetooth_printer_service.dart';
 import 'package:blue_thermal_printer/blue_thermal_printer.dart';
 import 'package:pos_panglima_app/services/helper/dio_client.dart';
+import 'package:pos_panglima_app/services/storage/error_log_manager.dart';
+import 'package:pos_panglima_app/utils/loader_utils.dart';
 import 'package:pos_panglima_app/utils/modal_handling.dart';
+import 'package:pos_panglima_app/utils/snackbar_util.dart';
 import 'package:pos_panglima_app/views/widgets/endsift_modal.dart';
 
 class PengaturanPage extends StatefulWidget {
@@ -21,6 +26,7 @@ class _PengaturanPageState extends State<PengaturanPage> {
   List<BluetoothDevice> devices = [];
   BluetoothDevice? connectedPrinter;
   bool isScanning = false;
+  StreamSubscription? _bluetoothSubscription;
   final apiClient = ApiClient();
   late final AuthService authService;
   Map<String, dynamic>? profile;
@@ -39,7 +45,7 @@ class _PengaturanPageState extends State<PengaturanPage> {
     authService = AuthService(apiClient.dio);
     getProfile();
 
-    BluetoothPrinterService.bluetooth.onStateChanged().listen((state) {
+    _bluetoothSubscription = BluetoothPrinterService.bluetooth.onStateChanged().listen((state) {
       setState(() {
         connectedPrinter = BluetoothPrinterService.connectedPrinter;
       });
@@ -70,8 +76,13 @@ class _PengaturanPageState extends State<PengaturanPage> {
       });
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(ok ? "Terhubung ke ${device.name}" : "Gagal")),
+    SnackbarUtil.show(
+      context,
+      title: ok ? "Berhasil Terhubung" : "Koneksi Gagal",
+      message: ok
+          ? "Terhubung ke ${device.name}"
+          : "Tidak dapat terhubung ke perangkat, silakan coba lagi",
+      status: ok ? SnackBarStatus.success : SnackBarStatus.error,
     );
   }
 
@@ -126,87 +137,15 @@ class _PengaturanPageState extends State<PengaturanPage> {
   }
 
   @override
+  void dispose() {
+    _bluetoothSubscription?.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Row(
       children: [
-        // Expanded(
-        //   flex: 1,
-        //   child: Container(
-        //     decoration: BoxDecoration(
-        //       border: Border(right: BorderSide(color: Colors.black26)),
-        //     ),
-        //     child: Column(
-        //       mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        //       children: [
-        //         Column(
-        //           children: [
-        //             InkWell(
-        //               onTap: () {
-        //                 setState(() {
-        //                   numberPage = 1;
-        //                 });
-        //               },
-        //               child: Container(
-        //                 color: numberPage == 1
-        //                     ? Colors.amber[100]
-        //                     : Colors.white,
-        //                 padding: EdgeInsets.all(14.0),
-        //                 child: Row(
-        //                   spacing: 16.0,
-        //                   children: [
-        //                     Icon(
-        //                       Icons.person,
-        //                       size: 26.0,
-        //                       color: Colors.grey[800],
-        //                     ),
-        //                     Text(
-        //                       'Profil Pengguna',
-        //                       style: TextStyle(
-        //                         fontSize: 16.0,
-        //                         fontWeight: FontWeight.w500,
-        //                       ),
-        //                     ),
-        //                   ],
-        //                 ),
-        //               ),
-        //             ),
-        //             InkWell(
-        //               onTap: () {
-        //                 setState(() {
-        //                   numberPage = 2;
-        //                 });
-        //               },
-        //               child: Container(
-        //                 color: numberPage == 2
-        //                     ? Colors.amber[100]
-        //                     : Colors.white,
-        //                 padding: EdgeInsets.all(14.0),
-        //                 child: Row(
-        //                   spacing: 16.0,
-        //                   children: [
-        //                     Icon(
-        //                       Icons.print,
-        //                       size: 26.0,
-        //                       color: Colors.grey[800],
-        //                     ),
-        //                     Text(
-        //                       'Printer',
-        //                       style: TextStyle(
-        //                         fontSize: 16.0,
-        //                         fontWeight: FontWeight.w500,
-        //                       ),
-        //                     ),
-        //                   ],
-        //                 ),
-        //               ),
-        //             ),
-        //           ],
-        //         ),
-        //         Text('V.1.0.0'),
-        //       ],
-        //     ),
-        //   ),
-        // ),
         Expanded(
           flex: 1,
           child: Container(
@@ -239,6 +178,12 @@ class _PengaturanPageState extends State<PengaturanPage> {
                         icon: Icons.print_outlined,
                         label: 'Printer',
                       ),
+
+                      // _buildMenuItem(
+                      //   index: 3,
+                      //   icon: Icons.error_outline,
+                      //   label: 'Log Error',
+                      // ),
                     ],
                   ),
                 ),
@@ -275,6 +220,8 @@ class _PengaturanPageState extends State<PengaturanPage> {
               ? profil()
               : numberPage == 2
               ? printer()
+              : numberPage == 3
+              ? errorLog()
               : Center(child: Text('Comming Soon')),
         ),
       ],
@@ -524,12 +471,12 @@ class _PengaturanPageState extends State<PengaturanPage> {
               ),
               // Tombol refresh/stop scanning yang lebih kecil di pojok
               if (isScanning)
-                const SizedBox(
+                SizedBox(
                   width: 20,
                   height: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Colors.amber,
+                  child: ModernLoading(
+                    timeout: const Duration(seconds: 10),
+                    onRetry: () {},
                   ),
                 )
               else
@@ -626,12 +573,12 @@ class _PengaturanPageState extends State<PengaturanPage> {
             child: ElevatedButton.icon(
               onPressed: isScanning ? null : () => scanDevices(),
               icon: isScanning
-                  ? const SizedBox(
+                  ? SizedBox(
                       width: 18,
                       height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.grey,
+                      child: ModernLoading(
+                        timeout: const Duration(seconds: 10),
+                        onRetry: () {},
                       ),
                     )
                   : const Icon(Icons.search_rounded),
@@ -656,6 +603,50 @@ class _PengaturanPageState extends State<PengaturanPage> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget errorLog() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            "Fitur Error Log sedang dalam pengembangan",
+            style: TextStyle(fontSize: 16, color: Colors.grey[500]),
+          ),
+          SizedBox(height: 20),
+          ElevatedButton(
+            onPressed: () async {
+              await ErrorLogManager.saveLog(
+                title: 'Test Error',
+                description: 'Ini adalah deskripsi error untuk pengujian 1',
+              );
+            },
+            child: Text("Save Error"),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final logs = await ErrorLogManager.getLogs();
+              debugPrint(logs.toString());
+            },
+            child: Text("Print Error"),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              await ErrorLogManager.clearLogs();
+            },
+            child: Text("Clear Error"),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final fcmToken = await FirebaseMessaging.instance.getToken();
+              debugPrint("FCM Token: $fcmToken");
+            },
+            child: Text("Print FCM Token"),
+          ),
+        ],
+      ),
     );
   }
 

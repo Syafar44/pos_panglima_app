@@ -8,6 +8,7 @@ import 'package:pos_panglima_app/services/order_service.dart';
 import 'package:pos_panglima_app/utils/convert.dart';
 import 'package:blue_thermal_printer/blue_thermal_printer.dart';
 import 'package:pos_panglima_app/services/bluetooth_printer_service.dart';
+import 'package:pos_panglima_app/utils/skeleton_loader.dart';
 import 'package:pos_panglima_app/utils/modal_handling.dart';
 
 class RiwayatPenjualanPage extends StatefulWidget {
@@ -36,12 +37,13 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
   Map<String, dynamic>? orderDetail;
   Map<String, dynamic>? paginationInfo;
   BluetoothDevice? connectedPrinter;
+  StreamSubscription? _bluetoothSubscription;
 
   @override
   void initState() {
     super.initState();
 
-    BluetoothPrinterService.bluetooth.onStateChanged().listen((state) {
+    _bluetoothSubscription = BluetoothPrinterService.bluetooth.onStateChanged().listen((state) {
       setState(() {
         connectedPrinter = BluetoothPrinterService.connectedPrinter;
       });
@@ -63,14 +65,13 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
       }
     });
 
-    _fetchOrders();
     _fetchProfile();
   }
 
-  Future<void> _fetchOrders() async {
+  Future<void> _fetchOrders(int userId) async {
     try {
       final response = await orderService.getOrderList(
-        userId ?? 0,
+        userId,
         selectedPageNumber,
         10,
         controllerSearch.text,
@@ -91,6 +92,7 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
         setState(() => isFirstLoad = false);
       }
     } catch (e) {
+      if (!mounted) return;
       showDialog(
         context: context,
         builder: (context) {
@@ -110,7 +112,7 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
       setState(() => isLoadingOrdersDetail = true);
 
       final response = await orderService.getOrderDetail(id);
-      print(response);
+      debugPrint(response.toString());
 
       setState(() {
         orderId = id;
@@ -118,6 +120,7 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
         isLoadingOrdersDetail = false;
       });
     } catch (e) {
+      if (!mounted) return;
       showDialog(
         context: context,
         builder: (context) {
@@ -136,7 +139,8 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
     try {
       final response = await authService.getProfile();
       final data = response.data['data'];
-
+      final newUserId = data?['userid'];
+      await _fetchOrders(newUserId);
       if (!mounted) return;
       setState(() {
         userId = data?['userid'];
@@ -145,6 +149,7 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
     } catch (e) {
       isLoadingUserId = false;
       debugPrint("Gagal ambil user ID: $e");
+      if (!mounted) return;
       showDialog(
         context: context,
         builder: (context) {
@@ -177,6 +182,7 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
         isPayment: false,
       );
     } catch (e) {
+      if (!mounted) return;
       showDialog(
         context: context,
         builder: (context) {
@@ -193,6 +199,7 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
 
   @override
   void dispose() {
+    _bluetoothSubscription?.cancel();
     _debounce?.cancel();
     controllerSearch.dispose();
     super.dispose();
@@ -214,13 +221,11 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
                   padding: const EdgeInsets.symmetric(
                     horizontal: 16.0,
                     vertical: 12.0,
-                  ), // Padding luar agar tidak nempel ke tepi
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     border: Border(
-                      bottom: BorderSide(
-                        color: Colors.grey[200]!,
-                      ), // Garis pemisah yang lebih halus
+                      bottom: BorderSide(color: Colors.grey[200]!),
                     ),
                   ),
                   child: Container(
@@ -251,7 +256,7 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
                                 onPressed: () {
                                   controllerSearch.clear();
                                   setState(() => selectedPageNumber = 1);
-                                  _fetchOrders();
+                                  _fetchOrders(userId!);
                                 },
                               )
                             : null,
@@ -270,7 +275,7 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
                           () {
                             // Debounce 800ms cukup responsif
                             setState(() => selectedPageNumber = 1);
-                            _fetchOrders();
+                            _fetchOrders(userId!);
                           },
                         );
                       },
@@ -279,7 +284,10 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
                 ),
                 Expanded(
                   child: isLoadingOrdersList || isLoadingUserId
-                      ? Center(child: CircularProgressIndicator())
+                      ? Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 14.0),
+                          child: SkeletonLoader.listHistorySkeleton(),
+                        )
                       : Stack(
                           children: [
                             ListView.separated(
@@ -396,13 +404,10 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
                                             thickness: 0.5,
                                           ),
                                         ),
-
-                                        // Bagian Bawah: Info Method & User
                                         Row(
                                           mainAxisAlignment:
                                               MainAxisAlignment.spaceBetween,
                                           children: [
-                                            // Payment Method & Kasir
                                             Row(
                                               children: [
                                                 _buildSmallBadge(
@@ -418,7 +423,6 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
                                                 ),
                                               ],
                                             ),
-                                            // Order Method (Takeaway/Delivery/Compliment)
                                             Container(
                                               padding:
                                                   const EdgeInsets.symmetric(
@@ -500,7 +504,7 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
                         selectedPageNumber = pageNumber;
                         isLoadingOrdersList = true;
                       });
-                      _fetchOrders();
+                      _fetchOrders(userId!);
                     },
                     visiblePagesCount: 3,
                     totalPages: paginationInfo?['total_page'] ?? 0,
@@ -527,7 +531,10 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
         Expanded(
           flex: 2,
           child: isLoadingOrdersDetail || isLoadingUserId
-              ? Center(child: CircularProgressIndicator())
+              ? Padding(
+                  padding: const EdgeInsets.all(0),
+                  child: SkeletonLoader.detailHistorySkeleton(),
+                )
               : Column(
                   children: [
                     Container(
@@ -626,132 +633,6 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             spacing: 10.0,
                             children: [
-                              // Text(
-                              //   'Informasi Penjualan',
-                              //   style: TextStyle(
-                              //     fontSize: 18.0,
-                              //     fontWeight: FontWeight.bold,
-                              //   ),
-                              // ),
-                              // Row(
-                              //   children: [
-                              //     Expanded(
-                              //       child: Column(
-                              //         spacing: 20.0,
-                              //         crossAxisAlignment:
-                              //             CrossAxisAlignment.start,
-                              //         children: [
-                              //           Row(
-                              //             spacing: 10.0,
-                              //             children: [
-                              //               Icon(
-                              //                 Icons.article,
-                              //                 size: 50.0,
-                              //                 color: Colors.black87,
-                              //               ),
-                              //               Column(
-                              //                 crossAxisAlignment:
-                              //                     CrossAxisAlignment.start,
-                              //                 children: [
-                              //                   Text('ID Penjualan'),
-                              //                   Text(
-                              //                     orderDetail?['document_number'] ??
-                              //                         '-',
-                              //                     style: TextStyle(
-                              //                       fontSize: 16.0,
-                              //                     ),
-                              //                   ),
-                              //                 ],
-                              //               ),
-                              //             ],
-                              //           ),
-                              //           Row(
-                              //             spacing: 10.0,
-                              //             children: [
-                              //               Icon(
-                              //                 Icons.calendar_month,
-                              //                 size: 50.0,
-                              //                 color: Colors.black87,
-                              //               ),
-                              //               Column(
-                              //                 crossAxisAlignment:
-                              //                     CrossAxisAlignment.start,
-                              //                 children: [
-                              //                   Text('Tanggal Penjualan'),
-                              //                   Text(
-                              //                     formatDateTime(
-                              //                       orderDetail?['created_at'],
-                              //                     ),
-                              //                     style: TextStyle(
-                              //                       fontSize: 16.0,
-                              //                     ),
-                              //                   ),
-                              //                 ],
-                              //               ),
-                              //             ],
-                              //           ),
-                              //         ],
-                              //       ),
-                              //     ),
-                              //     Expanded(
-                              //       child: Column(
-                              //         spacing: 20.0,
-                              //         crossAxisAlignment:
-                              //             CrossAxisAlignment.start,
-                              //         children: [
-                              //           Row(
-                              //             spacing: 10.0,
-                              //             children: [
-                              //               Icon(
-                              //                 Icons.group,
-                              //                 size: 50.0,
-                              //                 color: Colors.black87,
-                              //               ),
-                              //               Column(
-                              //                 crossAxisAlignment:
-                              //                     CrossAxisAlignment.start,
-                              //                 children: [
-                              //                   Text('Nama Pelanggan'),
-                              //                   Text(
-                              //                     orderDetail?['customers_name'] ??
-                              //                         '-',
-                              //                     style: TextStyle(
-                              //                       fontSize: 16.0,
-                              //                     ),
-                              //                   ),
-                              //                 ],
-                              //               ),
-                              //             ],
-                              //           ),
-                              //           Row(
-                              //             spacing: 10.0,
-                              //             children: [
-                              //               Icon(
-                              //                 Icons.person,
-                              //                 size: 50.0,
-                              //                 color: Colors.black87,
-                              //               ),
-                              //               Column(
-                              //                 crossAxisAlignment:
-                              //                     CrossAxisAlignment.start,
-                              //                 children: [
-                              //                   Text('Dibuat Oleh'),
-                              //                   Text(
-                              //                     orderDetail?['users_name'] ??
-                              //                         '-',
-                              //                     style: TextStyle(
-                              //                       fontSize: 16.0,
-                              //                     ),
-                              //                   ),
-                              //                 ],
-                              //               ),
-                              //             ],
-                              //           ),
-                              //         ],
-                              //       ),
-                              //     ),
-                              //   ],
-                              // ),
                               const Text(
                                 'Informasi Penjualan',
                                 style: TextStyle(
@@ -815,139 +696,7 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
                                 ),
                               ),
                               Divider(),
-                              // Text(
-                              //   orderDetail?['pos_order_method_name'] ==
-                              //           'Compliment'
-                              //       ? 'Status Compliment'
-                              //       : 'Informasi Penerimaan',
-                              //   style: TextStyle(
-                              //     fontSize: 18.0,
-                              //     fontWeight: FontWeight.bold,
-                              //   ),
-                              // ),
-                              // Container(
-                              //   padding: EdgeInsets.all(20.0),
-                              //   decoration: BoxDecoration(
-                              //     color: Colors.grey[100],
-                              //     border: Border.all(color: Colors.black26),
-                              //     borderRadius: BorderRadius.all(
-                              //       Radius.circular(10.0),
-                              //     ),
-                              //   ),
-                              //   child:
-                              //       orderDetail?['pos_order_method_name'] ==
-                              //           'Compliment'
-                              //       ? Center(
-                              //           child: Container(
-                              //             padding: EdgeInsets.symmetric(
-                              //               horizontal: 20,
-                              //               vertical: 12,
-                              //             ),
-                              //             decoration: BoxDecoration(
-                              //               color:
-                              //                   orderDetail?['is_compliment_status'] ==
-                              //                       1
-                              //                   ? Colors.green.shade100
-                              //                   : Colors.red.shade100,
-                              //               border: Border.all(
-                              //                 width: 2,
-                              //                 color:
-                              //                     orderDetail?['is_compliment_status'] ==
-                              //                         1
-                              //                     ? Colors.green
-                              //                     : Colors.red,
-                              //               ),
-                              //               borderRadius: BorderRadius.all(
-                              //                 Radius.circular(12),
-                              //               ),
-                              //             ),
-                              //             child: Text(
-                              //               orderDetail?['is_compliment_status'] ==
-                              //                       1
-                              //                   ? 'Approved'
-                              //                   : 'Rejected',
-                              //               style: TextStyle(
-                              //                 color:
-                              //                     orderDetail?['is_compliment_status'] ==
-                              //                         1
-                              //                     ? Colors.green
-                              //                     : Colors.red,
-                              //                 fontSize: 20,
-                              //                 fontWeight: FontWeight.bold,
-                              //               ),
-                              //             ),
-                              //           ),
-                              //         )
-                              //       : Row(
-                              //           mainAxisAlignment:
-                              //               MainAxisAlignment.spaceAround,
-                              //           children: [
-                              //             Column(
-                              //               children: [
-                              //                 Text('Total Penerimaan'),
-                              //                 Text(
-                              //                   convertIDR(
-                              //                     orderDetail?['total_amount'] ??
-                              //                         0,
-                              //                   ),
-                              //                   style: TextStyle(
-                              //                     fontSize: 21.0,
-                              //                     color: Colors.orange,
-                              //                     fontWeight: FontWeight.bold,
-                              //                   ),
-                              //                 ),
-                              //               ],
-                              //             ),
-                              //             SizedBox(
-                              //               height: 50.0,
-                              //               child: VerticalDivider(
-                              //                 thickness: 1,
-                              //                 color: Colors.black26,
-                              //               ),
-                              //             ),
-                              //             Column(
-                              //               children: [
-                              //                 Text('Total Bayar'),
-                              //                 Text(
-                              //                   convertIDR(
-                              //                     orderDetail?['pay_amount'] ??
-                              //                         0,
-                              //                   ),
-                              //                   style: TextStyle(
-                              //                     fontSize: 21.0,
-                              //                     color: Colors.orange,
-                              //                     fontWeight: FontWeight.bold,
-                              //                   ),
-                              //                 ),
-                              //               ],
-                              //             ),
-                              //             SizedBox(
-                              //               height: 50.0,
-                              //               child: VerticalDivider(
-                              //                 thickness: 1,
-                              //                 color: Colors.black26,
-                              //               ),
-                              //             ),
-                              //             Column(
-                              //               children: [
-                              //                 Text('Kembali'),
-                              //                 Text(
-                              //                   convertIDR(
-                              //                     orderDetail?['pay_amount'] -
-                              //                             orderDetail?['total_amount'] ??
-                              //                         0,
-                              //                   ),
-                              //                   style: TextStyle(
-                              //                     fontSize: 21.0,
-                              //                     color: Colors.orange,
-                              //                     fontWeight: FontWeight.bold,
-                              //                   ),
-                              //                 ),
-                              //               ],
-                              //             ),
-                              //           ],
-                              //         ),
-                              // ),
+
                               Text(
                                 orderDetail?['pos_order_method_name'] ==
                                         'Compliment'
@@ -981,83 +730,7 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
                                       )
                                     : _buildPaymentInfo(orderDetail),
                               ),
-                              // Text(
-                              //   orderDetail?['keterangan'] == ''
-                              //       ? 'Riwayat Penerimaan'
-                              //       : 'Keterangan Compliment',
-                              //   style: TextStyle(
-                              //     fontSize: 18.0,
-                              //     fontWeight: FontWeight.bold,
-                              //   ),
-                              // ),
-                              // Container(
-                              //   padding: EdgeInsets.only(bottom: 20.0),
-                              //   decoration: BoxDecoration(
-                              //     border: Border(
-                              //       bottom: BorderSide(color: Colors.black26),
-                              //     ),
-                              //   ),
-                              //   child: orderDetail?['keterangan'] != ''
-                              //       ? SizedBox(
-                              //           width: double.infinity,
-                              //           child: Text(
-                              //             orderDetail?['keterangan'],
-                              //             style: TextStyle(fontSize: 16),
-                              //           ),
-                              //         )
-                              //       : Row(
-                              //           mainAxisAlignment:
-                              //               MainAxisAlignment.spaceBetween,
-                              //           children: [
-                              //             Column(
-                              //               crossAxisAlignment:
-                              //                   CrossAxisAlignment.start,
-                              //               children: [
-                              //                 Text(
-                              //                   orderDetail?['document_number'] ??
-                              //                       '-',
-                              //                   style: TextStyle(
-                              //                     fontSize: 18.0,
-                              //                     fontWeight: FontWeight.bold,
-                              //                   ),
-                              //                 ),
-                              //                 Text(
-                              //                   orderDetail?['pos_payment_method_name'] ??
-                              //                       '-',
-                              //                   style: TextStyle(
-                              //                     fontSize: 16.0,
-                              //                   ),
-                              //                 ),
-                              //               ],
-                              //             ),
-                              //             Column(
-                              //               crossAxisAlignment:
-                              //                   CrossAxisAlignment.end,
-                              //               children: [
-                              //                 Text(
-                              //                   formatDateTime(
-                              //                     orderDetail?['created_at'],
-                              //                   ),
-                              //                   style: TextStyle(
-                              //                     fontSize: 16.0,
-                              //                   ),
-                              //                 ),
-                              //                 Text(
-                              //                   convertIDR(
-                              //                     orderDetail?['total_amount'] ??
-                              //                         0,
-                              //                   ),
-                              //                   style: TextStyle(
-                              //                     fontSize: 22.0,
-                              //                     fontWeight: FontWeight.bold,
-                              //                     color: Colors.orange,
-                              //                   ),
-                              //                 ),
-                              //               ],
-                              //             ),
-                              //           ],
-                              //         ),
-                              // ),
+
                               Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
@@ -1195,109 +868,7 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
                                   ), // Padding bawah sebelum masuk ke list produk
                                 ],
                               ),
-                              // Text(
-                              //   'Barang & Jasa',
-                              //   style: TextStyle(
-                              //     fontSize: 18.0,
-                              //     fontWeight: FontWeight.bold,
-                              //   ),
-                              // ),
-                              // Column(
-                              //   spacing: 12,
-                              //   children: (orderDetail?['pos_order_lines'] as List).map((
-                              //     line,
-                              //   ) {
-                              //     return Row(
-                              //       mainAxisAlignment:
-                              //           MainAxisAlignment.spaceBetween,
-                              //       children: [
-                              //         Row(
-                              //           spacing: 15.0,
-                              //           children: [
-                              //             Container(
-                              //               width: 170,
-                              //               height: 100,
-                              //               decoration: BoxDecoration(
-                              //                 gradient: LinearGradient(
-                              //                   colors: [
-                              //                     secondColor(
-                              //                       line['pos_menus_name'],
-                              //                     ),
-                              //                     baseColor(
-                              //                       line['pos_menus_name'],
-                              //                     ),
-                              //                   ],
-                              //                   begin: Alignment.topLeft,
-                              //                   end: Alignment.bottomRight,
-                              //                 ),
-                              //                 borderRadius:
-                              //                     BorderRadius.circular(10),
-                              //               ),
-                              //               alignment: Alignment.center,
-                              //               child: Text(
-                              //                 getInitials(
-                              //                   line['pos_menus_name'],
-                              //                 ),
-                              //                 style: TextStyle(
-                              //                   fontWeight: FontWeight.bold,
-                              //                   fontSize: 60,
-                              //                 ),
-                              //               ),
-                              //             ),
-                              //             Column(
-                              //               crossAxisAlignment:
-                              //                   CrossAxisAlignment.start,
-                              //               spacing: 22.0,
-                              //               children: [
-                              //                 Column(
-                              //                   crossAxisAlignment:
-                              //                       CrossAxisAlignment.start,
-                              //                   children: [
-                              //                     Text(
-                              //                       line['pos_menus_name'],
-                              //                       style: TextStyle(
-                              //                         fontSize: 18.0,
-                              //                         fontWeight:
-                              //                             FontWeight.bold,
-                              //                       ),
-                              //                     ),
-                              //                     Text(
-                              //                       '${line['quantity']} Pcs',
-                              //                     ),
-                              //                   ],
-                              //                 ),
-                              //                 Column(
-                              //                   crossAxisAlignment:
-                              //                       CrossAxisAlignment.start,
-                              //                   children:
-                              //                       (line['pos_order_lines_material']
-                              //                               as List)
-                              //                           .map((item) {
-                              //                             return Text(
-                              //                               '${item['quantity']}x ${item['items_name']}',
-                              //                             );
-                              //                           })
-                              //                           .toList(),
-                              //                 ),
-                              //                 Text(
-                              //                   'Diinput Oleh: ${orderDetail?['users_name']}',
-                              //                 ),
-                              //               ],
-                              //             ),
-                              //           ],
-                              //         ),
-                              //         Text(
-                              //           convertIDR(line['total']),
-                              //           style: TextStyle(
-                              //             fontSize: 20.0,
-                              //             color: Colors.orange,
-                              //             fontWeight: FontWeight.bold,
-                              //           ),
-                              //         ),
-                              //       ],
-                              //     );
-                              //   }).toList(),
-                              // ),
+
                               Text(
                                 'Barang & Jasa',
                                 style: TextStyle(
@@ -1305,7 +876,6 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
-                              // Menggunakan ListView.separated atau Column dengan Divider antar item
                               Column(
                                 children: (orderDetail?['pos_order_lines'] as List).map((
                                   line,
@@ -1501,132 +1071,60 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
                                         ),
 
                                         // 3. Subtotal
-                                        Text(
-                                          convertIDR(line['total']),
-                                          style: const TextStyle(
-                                            fontSize: 16.0,
-                                            color: Colors.black87,
-                                            fontWeight: FontWeight.bold,
-                                          ),
+                                        Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.end,
+                                          children: [
+                                            Text(
+                                              convertIDR(line['subtotal']),
+                                              style: TextStyle(
+                                                fontSize: 16.0,
+                                                color:
+                                                    line['subtotal'] !=
+                                                        line['total']
+                                                    ? Colors.black45
+                                                    : Colors.black,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                            if (line['subtotal'] !=
+                                                line['total'])
+                                              Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.end,
+                                                children: [
+                                                  Text(
+                                                    '- ${convertIDR(line['subtotal'] - line['total'])}',
+                                                    style: TextStyle(
+                                                      fontSize: 16.0,
+                                                      color: Colors.red[300],
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                    ),
+                                                  ),
+                                                  Container(
+                                                    height: 1.5,
+                                                    width: 100,
+                                                    color: Colors.redAccent,
+                                                  ),
+                                                  Text(
+                                                    convertIDR(line['total']),
+                                                    style: const TextStyle(
+                                                      fontSize: 16.0,
+                                                      color: Colors.black87,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                          ],
                                         ),
                                       ],
                                     ),
                                   );
                                 }).toList(),
                               ),
-                              // Container(
-                              //   padding: EdgeInsets.symmetric(vertical: 20.0),
-                              //   decoration: BoxDecoration(
-                              //     border: Border(
-                              //       bottom: BorderSide(color: Colors.black26),
-                              //     ),
-                              //   ),
-                              //   child: Row(
-                              //     mainAxisAlignment:
-                              //         MainAxisAlignment.spaceBetween,
-                              //     children: [
-                              //       Text(
-                              //         'Subtotal Order',
-                              //         style: TextStyle(
-                              //           fontSize: 18.0,
-                              //           fontWeight: FontWeight.bold,
-                              //         ),
-                              //       ),
-                              //       Text(
-                              //         convertIDR(
-                              //           orderDetail?['subtotal_amount'],
-                              //         ),
-                              //         style: TextStyle(
-                              //           fontSize: 20.0,
-                              //           color: Colors.orange,
-                              //           fontWeight: FontWeight.bold,
-                              //         ),
-                              //       ),
-                              //     ],
-                              //   ),
-                              // ),
-                              // Container(
-                              //   padding: EdgeInsets.symmetric(vertical: 20.0),
-                              //   decoration: BoxDecoration(
-                              //     border: Border(
-                              //       bottom: BorderSide(color: Colors.black26),
-                              //     ),
-                              //   ),
-                              //   child: Column(
-                              //     spacing: 10,
-                              //     children: [
-                              //       Row(
-                              //         mainAxisAlignment:
-                              //             MainAxisAlignment.spaceBetween,
-                              //         children: [
-                              //           Text(
-                              //             'Subtotal',
-                              //             style: TextStyle(
-                              //               fontSize: 18.0,
-                              //               fontWeight: FontWeight.bold,
-                              //             ),
-                              //           ),
-                              //           Text(
-                              //             convertIDR(
-                              //               orderDetail?['subtotal_amount'],
-                              //             ),
-                              //             style: TextStyle(
-                              //               fontSize: 20.0,
-                              //               color: Colors.orange,
-                              //               fontWeight: FontWeight.bold,
-                              //             ),
-                              //           ),
-                              //         ],
-                              //       ),
-                              //       if (orderDetail?['discount_amount'] != 0)
-                              //         Row(
-                              //           mainAxisAlignment:
-                              //               MainAxisAlignment.spaceBetween,
-                              //           children: [
-                              //             Text(
-                              //               'Diskon',
-                              //               style: TextStyle(
-                              //                 fontSize: 18.0,
-                              //                 fontWeight: FontWeight.bold,
-                              //               ),
-                              //             ),
-                              //             Text(
-                              //               '- ${convertIDR(orderDetail?['discount_amount'])}',
-                              //               style: TextStyle(
-                              //                 fontSize: 20.0,
-                              //                 color: Colors.orange,
-                              //                 fontWeight: FontWeight.bold,
-                              //               ),
-                              //             ),
-                              //           ],
-                              //         ),
-                              //     ],
-                              //   ),
-                              // ),
-                              // Container(
-                              //   padding: EdgeInsets.symmetric(vertical: 20.0),
-                              //   child: Row(
-                              //     mainAxisAlignment:
-                              //         MainAxisAlignment.spaceBetween,
-                              //     children: [
-                              //       Text(
-                              //         'GRAND TOTAL',
-                              //         style: TextStyle(
-                              //           fontSize: 20.0,
-                              //           fontWeight: FontWeight.bold,
-                              //         ),
-                              //       ),
-                              //       Text(
-                              //         convertIDR(orderDetail?['total_amount']),
-                              //         style: TextStyle(
-                              //           fontSize: 22.0,
-                              //           color: Colors.orange,
-                              //           fontWeight: FontWeight.bold,
-                              //         ),
-                              //       ),
-                              //     ],
-                              //   ),
-                              // ),
                               Container(
                                 padding: const EdgeInsets.all(20.0),
                                 decoration: BoxDecoration(

@@ -2,6 +2,8 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:pos_panglima_app/services/auth_service.dart';
 import 'package:pos_panglima_app/services/helper/dio_client.dart';
+import 'package:pos_panglima_app/utils/loader_utils.dart';
+import 'package:pos_panglima_app/utils/snackbar_util.dart';
 import 'package:pos_panglima_app/views/widgets/startsift_modal.dart';
 
 class LoginPage extends StatefulWidget {
@@ -14,8 +16,8 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  TextEditingController controllerEmail = TextEditingController();
-  TextEditingController controllerPw = TextEditingController();
+  final TextEditingController controllerEmail = TextEditingController();
+  final TextEditingController controllerPw = TextEditingController();
   final apiClient = ApiClient();
   late final AuthService authService;
 
@@ -28,175 +30,254 @@ class _LoginPageState extends State<LoginPage> {
     authService = AuthService(apiClient.dio);
   }
 
+  @override
+  void dispose() {
+    controllerEmail.dispose();
+    controllerPw.dispose();
+    super.dispose();
+  }
+
   Future<void> login() async {
-    if (!mounted) return;
+    if (controllerEmail.text.isEmpty || controllerPw.text.isEmpty) {
+      SnackbarUtil.show(
+        context,
+        title: "Input Kosong",
+        message: "Email dan kata sandi wajib diisi",
+        status: SnackBarStatus.warning,
+      );
+      return;
+    }
 
     setState(() => loading = true);
 
     try {
       final response = await authService.login({
-        "email": controllerEmail.text,
+        "email": controllerEmail.text.trim(),
         "password": controllerPw.text,
       });
 
-      final roles = response.data['data']['roles'];
+      final data = response.data['data'];
+      final roles = data['roles'] ?? '';
 
       if (!roles.toLowerCase().contains('kasir')) {
-        ScaffoldMessenger.of(
+        if (!mounted) return;
+        SnackbarUtil.show(
           context,
-        ).showSnackBar(const SnackBar(content: Text("Bukan Akun KASIR")));
+          title: "Akses Ditolak",
+          message: "Akun ini tidak memiliki akses sebagai kasir",
+          status: SnackBarStatus.error,
+        );
         return;
       }
 
-      final token = response.data['data']['token'];
-      final userId = response.data['data']['id'];
-      await apiClient.saveToken(token);
+      await apiClient.saveToken(data['token']);
 
       final fcmToken = await FirebaseMessaging.instance.getToken();
 
-      await authService.postFcmToken({
-        "users_id": int.parse(userId),
-        "fcm_token": '$fcmToken',
-        "tipe": "android",
-      });
+      try {
+        if (fcmToken != null) {
+          await authService.postFcmToken({
+            "users_id": data['id'],
+            "fcm_token": fcmToken,
+            "tipe": "android",
+          });
+        }
+      } catch (fcmError) {
+        debugPrint("FCM Error: $fcmError");
+      }
 
       if (!mounted) return;
 
+      // Menampilkan modal shift setelah login berhasil
       showDialog(
         context: context,
-        barrierDismissible: true,
+        barrierDismissible: false,
         useRootNavigator: true,
         builder: (_) => const StartsiftModal(),
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
+      SnackbarUtil.show(
         context,
-      ).showSnackBar(const SnackBar(content: Text("Login gagal")));
+        title: "Login Gagal",
+        message: "Periksa kembali kredensial Anda atau koneksi internet",
+        status: SnackBarStatus.error,
+      );
     } finally {
-      if (mounted) {
-        setState(() => loading = false);
-      }
+      if (mounted) setState(() => loading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    final isTablet = size.width > 600;
+
     return Scaffold(
-      body: SafeArea(
-        child: ClipRRect(
-          child: Container(
-            width: double.infinity,
-            height: double.infinity,
-            decoration: BoxDecoration(
-              image: DecorationImage(
-                image: AssetImage('assets/images/background.jpg'),
-                fit: BoxFit.cover,
-              ),
-            ),
-            child: Center(
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: const BoxDecoration(
+          image: DecorationImage(
+            image: AssetImage('assets/images/background.jpg'),
+            fit: BoxFit.cover,
+          ),
+        ),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.black.withOpacity(
+              0.3,
+            ), // Overlay gelap agar teks lebih kontras
+          ),
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24.0),
               child: Container(
-                width: 600.0,
-                height: 450.0,
+                constraints: BoxConstraints(
+                  maxWidth: isTablet ? 500 : double.infinity,
+                ),
                 decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16.0),
+                  color: Colors.white.withOpacity(0.95),
+                  borderRadius: BorderRadius.circular(24.0),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.grey.withValues(),
-                      spreadRadius: 3,
-                      blurRadius: 5,
-                      offset: const Offset(0, 3),
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 20,
+                      offset: const Offset(0, 10),
                     ),
                   ],
                 ),
-                padding: const EdgeInsets.all(20.0),
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Center(
-                        child: Image.asset(
-                          'assets/images/logo.png',
-                          width: 150.0,
+                padding: const EdgeInsets.all(32.0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Image.asset(
+                        'assets/images/logo.png',
+                        height: 80.0,
+                        errorBuilder: (_, __, ___) => const Icon(
+                          Icons.storefront,
+                          size: 80,
+                          color: Colors.amber,
                         ),
                       ),
-                      SizedBox(height: 20.0),
-                      Text(
-                        'Masuk Sekarang',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 20.0,
-                        ),
+                    ),
+                    const SizedBox(height: 32.0),
+                    const Text(
+                      'Selamat Datang',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 24.0,
+                        color: Colors.black87,
                       ),
-                      SizedBox(height: 20.0),
-                      TextField(
-                        controller: controllerEmail,
-                        decoration: InputDecoration(
-                          hintText: 'Email',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(15.0),
-                          ),
-                        ),
-                        onEditingComplete: () => setState(() {}),
-                      ),
-                      SizedBox(height: 10.0),
-                      TextField(
-                        controller: controllerPw,
-                        obscureText: _isObscure,
-                        decoration: InputDecoration(
-                          hintText: 'Kata Sandi',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(15.0),
-                          ),
-                          suffixIcon: IconButton(
-                            icon: Icon(
-                              _isObscure
-                                  ? Icons.visibility_off
-                                  : Icons.visibility,
-                            ),
-                            onPressed: () {
-                              setState(() {
-                                _isObscure = !_isObscure;
-                              });
-                            },
-                          ),
-                        ),
-                        onEditingComplete: () => setState(() {}),
-                      ),
-                      SizedBox(height: 20.0),
-                      ElevatedButton(
-                        onPressed: () {
-                          loading ? null : login();
-                        },
+                    ),
+                    const Text(
+                      'Silakan masuk ke akun Kasir Anda',
+                      style: TextStyle(fontSize: 14.0, color: Colors.grey),
+                    ),
+                    const SizedBox(height: 24.0),
+
+                    // Email Field
+                    _buildTextField(
+                      controller: controllerEmail,
+                      hint: 'Email Kasir',
+                      icon: Icons.email_outlined,
+                      keyboardType: TextInputType.emailAddress,
+                    ),
+                    const SizedBox(height: 16.0),
+
+                    // Password Field
+                    _buildTextField(
+                      controller: controllerPw,
+                      hint: 'Kata Sandi',
+                      icon: Icons.lock_outline,
+                      isPassword: true,
+                      obscureText: _isObscure,
+                      onTogglePassword: () =>
+                          setState(() => _isObscure = !_isObscure),
+                    ),
+                    const SizedBox(height: 24.0),
+
+                    // Login Button
+                    SizedBox(
+                      width: double.infinity,
+                      height: 55,
+                      child: ElevatedButton(
+                        onPressed: loading ? null : login,
                         style: ElevatedButton.styleFrom(
-                          minimumSize: Size(double.infinity, 40.0),
                           backgroundColor: Colors.amber,
+                          foregroundColor: Colors.black,
+                          elevation: 0,
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14.0),
+                            borderRadius: BorderRadius.circular(16.0),
                           ),
                         ),
                         child: loading
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  color: Colors.white,
-                                  strokeWidth: 2,
-                                ),
-                              )
+                            ? ModernLoading(
+                                size: 24,
+                                strokeWidth: 3,
+                                timeout: const Duration(seconds: 10),
+                                onRetry: () {},
+                              ) // Menggunakan utilitas baru
                             : const Text(
                                 "Masuk",
-                                style: TextStyle(color: Colors.black),
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
                               ),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required String hint,
+    required IconData icon,
+    bool isPassword = false,
+    bool obscureText = false,
+    VoidCallback? onTogglePassword,
+    TextInputType? keyboardType,
+  }) {
+    return TextField(
+      controller: controller,
+      obscureText: obscureText,
+      keyboardType: keyboardType,
+      decoration: InputDecoration(
+        hintText: hint,
+        prefixIcon: Icon(icon, color: Colors.amber.shade700, size: 20),
+        suffixIcon: isPassword
+            ? IconButton(
+                icon: Icon(
+                  obscureText ? Icons.visibility_off : Icons.visibility,
+                  color: Colors.grey,
+                ),
+                onPressed: onTogglePassword,
+              )
+            : null,
+        filled: true,
+        fillColor: Colors.grey.shade50,
+        contentPadding: const EdgeInsets.symmetric(vertical: 18),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16.0),
+          borderSide: BorderSide(color: Colors.grey.shade200),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16.0),
+          borderSide: BorderSide(color: Colors.grey.shade200),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16.0),
+          borderSide: const BorderSide(color: Colors.amber, width: 2),
         ),
       ),
     );

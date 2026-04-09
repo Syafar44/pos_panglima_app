@@ -9,8 +9,8 @@ class ApiClient {
   ApiClient() {
     dio.options = BaseOptions(
       baseUrl: dotenv.env['BASE_URL']!,
-      connectTimeout: const Duration(milliseconds: 600000),
-      receiveTimeout: const Duration(milliseconds: 600000),
+      connectTimeout: const Duration(seconds: 30),
+      receiveTimeout: const Duration(seconds: 30),
       headers: {
         // "Content-Type": "application/json",
         "apikey": dotenv.env['API_KEY']!,
