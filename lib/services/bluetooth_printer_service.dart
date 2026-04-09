@@ -66,6 +66,7 @@ class BluetoothPrinterService {
         },
       );
     } catch (e) {
+      
       debugPrint("Connect error: $e");
       connectedPrinter = null;
       return false;

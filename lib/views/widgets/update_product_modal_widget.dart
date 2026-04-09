@@ -192,6 +192,7 @@ class _UpdateProductModalWidgetState extends State<UpdateProductModalWidget> {
       final response = await cartService.updateCart(id, payload);
       debugPrint('updateCart response: $response');
     } catch (e) {
+      if (!mounted) return;
       showDialog(
         context: context,
         builder: (context) {
@@ -204,6 +205,7 @@ class _UpdateProductModalWidgetState extends State<UpdateProductModalWidget> {
         },
       );
     } finally {
+      if (!mounted) return;
       widget.onSaved();
       Navigator.of(context).pop();
     }
@@ -211,6 +213,7 @@ class _UpdateProductModalWidgetState extends State<UpdateProductModalWidget> {
 
   Future<void> _loadShiftStatus() async {
     final result = await ShiftStorageService.hasActiveShift();
+    if (!mounted) return;
     setState(() {
       hasShift = result;
     });

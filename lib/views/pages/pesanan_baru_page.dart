@@ -45,6 +45,7 @@ class _PesananBaruPageState extends State<PesananBaruPage>
       await cartService.minusCart(id);
       loadCart();
     } catch (e) {
+      if (!mounted) return;
       loadCart();
       showDialog(
         context: context,
@@ -65,6 +66,7 @@ class _PesananBaruPageState extends State<PesananBaruPage>
       await cartService.plusCart(id);
       loadCart();
     } on DioException catch (e) {
+      if (!mounted) return;
       final String message = e.response?.data['message'] ?? 'Terjadi kesalahan';
 
       if (message.contains('insufficient_stock')) {
@@ -109,6 +111,7 @@ class _PesananBaruPageState extends State<PesananBaruPage>
     try {
       await cartService.deleteCart(id);
     } catch (e) {
+      if (!mounted) return;
       showDialog(
         context: context,
         builder: (context) {
@@ -319,6 +322,7 @@ class _PesananBaruPageState extends State<PesananBaruPage>
     try {
       await cartService.postCart(payload);
     } catch (e) {
+      if (!mounted) return;
       showDialog(
         context: context,
         builder: (context) {
@@ -340,6 +344,8 @@ class _PesananBaruPageState extends State<PesananBaruPage>
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
+
+      isDismissible: false,
       builder: (dialogContext) {
         return ProductModalWidget(
           title: e['title'],

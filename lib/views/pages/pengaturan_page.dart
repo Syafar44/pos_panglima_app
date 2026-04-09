@@ -120,6 +120,7 @@ class _PengaturanPageState extends State<PengaturanPage> {
         isLoadingProfile = false;
       });
     } catch (e) {
+      if (!mounted) return;
       isLoadingProfile = false;
       debugPrint("Gagal ambil profile: $e");
       showDialog(

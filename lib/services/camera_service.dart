@@ -38,6 +38,7 @@ class CameraService {
       final XFile file = await _controller!.takePicture();
       return File(file.path);
     } catch (e) {
+      
       debugPrint("Camera capture error: $e");
       return null;
     }

@@ -74,6 +74,7 @@ class _ReceptionInventoryPageState extends State<ReceptionInventoryPage> {
 
       setState(() => isLoading = false);
     } catch (e) {
+      if (!mounted) return;
       showDialog(
         context: context,
         builder: (context) {
@@ -99,6 +100,7 @@ class _ReceptionInventoryPageState extends State<ReceptionInventoryPage> {
         isLoadingProfile = false;
       });
     } catch (e) {
+      if (!mounted) return;
       showDialog(
         context: context,
         builder: (context) {

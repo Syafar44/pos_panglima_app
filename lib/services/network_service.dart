@@ -21,6 +21,7 @@ class NetworkService {
 
       return false;
     } catch (_) {
+      
       return false;
     }
   }
