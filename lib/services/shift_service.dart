@@ -1,9 +1,9 @@
 import 'package:dio/dio.dart';
 
-class SiftService {
+class ShiftService {
   final Dio dio;
 
-  SiftService(this.dio);
+  ShiftService(this.dio);
 
   Future<Response> startShift(Map<String, dynamic> payload) {
     return dio.post('/pos/shifts', data: payload);

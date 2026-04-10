@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:blue_thermal_printer/blue_thermal_printer.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:pos_panglima_app/data/app_config.dart';
 import 'package:pos_panglima_app/utils/convert.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:io';
@@ -243,10 +244,10 @@ class BluetoothPrinterService {
       1,
     );
     bluetooth.printCustom('--------------------------------', 1, 0);
-    bluetooth.printCustom("Whatsapp  : 082220002237", 0, 0);
-    bluetooth.printCustom("Instagram : @Jajanpanglima", 0, 0);
-    bluetooth.printCustom("Facebook  : @Jajan Panglima", 0, 0);
-    bluetooth.printCustom("Website   : www.rotigembungpanglima.com", 0, 0);
+    bluetooth.printCustom("Whatsapp  : ${AppConfig.whatsapp}", 0, 0);
+    bluetooth.printCustom("Instagram : ${AppConfig.instagram}", 0, 0);
+    bluetooth.printCustom("Facebook  : ${AppConfig.facebook}", 0, 0);
+    bluetooth.printCustom("Website   : ${AppConfig.website}", 0, 0);
 
     bluetooth.printNewLine();
     bluetooth.paperCut();

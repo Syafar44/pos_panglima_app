@@ -4,7 +4,7 @@ import 'package:pos_panglima_app/services/auth_service.dart';
 import 'package:pos_panglima_app/services/helper/dio_client.dart';
 import 'package:pos_panglima_app/utils/loader_utils.dart';
 import 'package:pos_panglima_app/utils/snackbar_util.dart';
-import 'package:pos_panglima_app/views/widgets/startsift_modal.dart';
+import 'package:pos_panglima_app/views/widgets/startShift_modal.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key, required this.title});
@@ -93,7 +93,7 @@ class _LoginPageState extends State<LoginPage> {
         context: context,
         barrierDismissible: false,
         useRootNavigator: true,
-        builder: (_) => const StartsiftModal(),
+        builder: (_) => const StartShiftModal(),
       );
     } catch (e) {
       if (!mounted) return;

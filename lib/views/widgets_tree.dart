@@ -11,14 +11,14 @@ import 'package:pos_panglima_app/views/pages/riwayat_penjualan_page.dart';
 import 'package:pos_panglima_app/views/widgets/drawer_widget.dart';
 
 List<Map<String, dynamic>> pages = [
-  {'name': 'Pesanan Baru', 'page': PesananBaruPage()},
-  // {'name': 'Open Bill', 'page': OpenBillPage()},
-  {'name': 'Riwayat Penjualan', 'page': RiwayatPenjualanPage()},
-  // {'name': 'Pelanggan', 'page': PelangganPage()},
-  // {'name': 'Karyawan', 'page': KaryawanPage()},
-  {'name': 'Laporan', 'page': LaporanPage()},
-  {'name': 'Inventory', 'page': InventoryPage()},
-  {'name': 'Pengaturan', 'page': PengaturanPage()},
+  {'name': 'Pesanan Baru', 'builder': () => const PesananBaruPage()},
+  // {'name': 'Open Bill', 'builder': () => const OpenBillPage()},
+  {'name': 'Riwayat Penjualan', 'builder': () => const RiwayatPenjualanPage()},
+  // {'name': 'Pelanggan', 'builder': () => const PelangganPage()},
+  // {'name': 'Karyawan', 'builder': () => const KaryawanPage()},
+  {'name': 'Laporan', 'builder': () => const LaporanPage()},
+  {'name': 'Inventory', 'builder': () => const InventoryPage()},
+  {'name': 'Pengaturan', 'builder': () => const PengaturanPage()},
 ];
 
 class WidgetTree extends StatelessWidget {
@@ -47,7 +47,7 @@ class WidgetTree extends StatelessWidget {
                 ),
               ),
             ),
-            body: pages[value]['page'],
+            body: pages[value]['builder'](),
             drawer: DrawerWidget(value: value),
           ),
         );

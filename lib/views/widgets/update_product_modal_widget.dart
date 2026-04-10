@@ -278,6 +278,22 @@ class _UpdateProductModalWidgetState extends State<UpdateProductModalWidget> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     // Sisi Kiri: Info Produk
+                    GestureDetector(
+                      onTap: () => Navigator.of(context).pop(),
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade100,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.close_rounded,
+                          size: 20,
+                          color: Colors.grey.shade800,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
                     Expanded(
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
@@ -349,7 +365,9 @@ class _UpdateProductModalWidgetState extends State<UpdateProductModalWidget> {
                           decoration: BoxDecoration(
                             gradient: LinearGradient(
                               colors: [
-                                secondColor(widget.posMenusName).withOpacity(0.8),
+                                secondColor(
+                                  widget.posMenusName,
+                                ).withOpacity(0.8),
                                 baseColor(widget.posMenusName),
                               ],
                               begin: Alignment.topLeft,
@@ -358,7 +376,9 @@ class _UpdateProductModalWidgetState extends State<UpdateProductModalWidget> {
                             borderRadius: BorderRadius.circular(16),
                             boxShadow: [
                               BoxShadow(
-                                color: baseColor(widget.posMenusName).withOpacity(0.3),
+                                color: baseColor(
+                                  widget.posMenusName,
+                                ).withOpacity(0.3),
                                 blurRadius: 8,
                                 offset: const Offset(0, 4),
                               ),

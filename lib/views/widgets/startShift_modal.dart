@@ -4,25 +4,25 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:pos_panglima_app/services/auth_service.dart';
 import 'package:pos_panglima_app/services/helper/dio_client.dart';
-import 'package:pos_panglima_app/services/sift_service.dart';
+import 'package:pos_panglima_app/services/shift_service.dart';
 import 'package:pos_panglima_app/services/storage/shift_storage_service.dart';
 import 'package:pos_panglima_app/utils/convert.dart';
 import 'package:pos_panglima_app/utils/loader_utils.dart';
 import 'package:pos_panglima_app/utils/modal_handling.dart';
+import 'package:pos_panglima_app/utils/rupiah_formatter.dart';
 import 'package:pos_panglima_app/utils/snackbar_util.dart';
 import 'package:pos_panglima_app/views/widgets_tree.dart';
-import 'package:intl/date_symbol_data_local.dart'; // tambahkan ini
-
-class StartsiftModal extends StatefulWidget {
-  const StartsiftModal({super.key});
+import 'package:intl/date_symbol_data_local.dart';
+class StartShiftModal extends StatefulWidget {
+  const StartShiftModal({super.key});
 
   @override
-  State<StartsiftModal> createState() => _StartsiftModalState();
+  State<StartShiftModal> createState() => _StartShiftModalState();
 }
 
-class _StartsiftModalState extends State<StartsiftModal> {
+class _StartShiftModalState extends State<StartShiftModal> {
   final apiClient = ApiClient();
-  late final SiftService siftService;
+  late final ShiftService shiftService;
   late final AuthService authService;
   Map<String, dynamic>? profile;
   int? customerId;
@@ -32,16 +32,12 @@ class _StartsiftModalState extends State<StartsiftModal> {
   String? selectedShift;
   final TextEditingController selectedShiftController = TextEditingController();
 
-  int parseRupiah(String text) {
-    return int.tryParse(text.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
-  }
-
   @override
   void initState() {
     super.initState();
     initializeDateFormatting('id_ID', null);
     authService = AuthService(apiClient.dio);
-    siftService = SiftService(apiClient.dio);
+    shiftService = ShiftService(apiClient.dio);
     getProfile();
   }
 
@@ -104,7 +100,7 @@ class _StartsiftModalState extends State<StartsiftModal> {
 
       final payload = buildPayload();
 
-      final response = await siftService.startShift(payload);
+      final response = await shiftService.startShift(payload);
       final shiftId = response.data['data']['id'];
 
       await ShiftStorageService.saveShiftId(shiftId, salesStart);
@@ -559,26 +555,6 @@ class _StartsiftModalState extends State<StartsiftModal> {
           ),
         ),
       ],
-    );
-  }
-}
-
-class RupiahFormatter extends TextInputFormatter {
-  final formatter = NumberFormat.currency(
-    locale: 'id_ID',
-    symbol: 'Rp ',
-    decimalDigits: 0,
-  );
-
-  @override
-  TextEditingValue formatEditUpdate(oldValue, newValue) {
-    final text = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
-    if (text.isEmpty) return const TextEditingValue(text: '');
-
-    final result = formatter.format(int.parse(text));
-    return TextEditingValue(
-      text: result,
-      selection: TextSelection.collapsed(offset: result.length),
     );
   }
 }

@@ -6,6 +6,7 @@ import 'package:pos_panglima_app/services/inventory_service.dart';
 import 'package:pos_panglima_app/utils/convert.dart';
 import 'package:pos_panglima_app/utils/loader_utils.dart';
 import 'package:pos_panglima_app/utils/modal_handling.dart';
+import 'package:pos_panglima_app/utils/notif_utils.dart';
 import 'package:pos_panglima_app/utils/skeleton_loader.dart';
 import 'package:pos_panglima_app/views/pages/reception_inventory_page.dart';
 
@@ -73,13 +74,20 @@ class _InventoryPageState extends State<InventoryPage> {
       final response = await inventoryService.getList(
         "page=$selectedPageNumber&limit=10&to_outlet_hub_id=$customerId",
       );
+      final list = response.data['data'] as List;
+      final count = list.where((item) => (item['approve'] ?? 0) == 0).length;
+
       setState(() {
-        inventoryList = response.data['data'];
+        inventoryList = list;
         isLoadingInventory = false;
-        unapprovedCount = inventoryList
-            .where((item) => (item['approve'] ?? 0) == 0)
-            .length;
+        unapprovedCount = count;
       });
+
+      if (count > 0) {
+        await saveInventoryReminder(count);
+      } else {
+        await clearInventoryReminder();
+      }
     } catch (e) {
       if (!mounted) return;
       inventoryIsEmpty = true;
@@ -113,27 +121,6 @@ class _InventoryPageState extends State<InventoryPage> {
                         index: 1,
                         icon: Icons.all_inbox_rounded,
                         label: 'Surat Jalan',
-                      ),
-                    ],
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 24.0),
-                  child: Column(
-                    children: [
-                      Divider(
-                        color: Colors.grey[100],
-                        indent: 20,
-                        endIndent: 20,
-                      ),
-                      const SizedBox(height: 10),
-                      Text(
-                        'V.1.0.0',
-                        style: TextStyle(
-                          color: Colors.grey[400],
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
                       ),
                     ],
                   ),
@@ -250,7 +237,7 @@ class _InventoryPageState extends State<InventoryPage> {
                             margin: const EdgeInsets.only(bottom: 16),
                             decoration: BoxDecoration(
                               color: Colors.white,
-                               borderRadius: BorderRadius.circular(15),
+                              borderRadius: BorderRadius.circular(15),
                               boxShadow: [
                                 BoxShadow(
                                   color: Colors.black.withOpacity(0.05),

@@ -8,18 +8,13 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:pos_panglima_app/firebase_options.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:pos_panglima_app/utils/notif_utils.dart';
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
-  final prefs = await SharedPreferences.getInstance();
-  await prefs.setString(
-    'notif_title',
-    message.notification?.title ?? 'Notifikasi',
-  );
-  await prefs.setString('notif_body', message.notification?.body ?? '');
-  await prefs.setBool('notif_visible', true);
+  await saveNotifToPrefs(message.notification?.title, message.notification?.body);
 }
 
 void main() async {
@@ -39,26 +34,11 @@ void main() async {
 
   final initialMessage = await FirebaseMessaging.instance.getInitialMessage();
   if (initialMessage != null) {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-      'notif_title',
-      initialMessage.notification?.title ?? 'Notifikasi',
-    );
-    await prefs.setString(
-      'notif_body',
-      initialMessage.notification?.body ?? '',
-    );
-    await prefs.setBool('notif_visible', true);
+    await saveNotifToPrefs(initialMessage.notification?.title, initialMessage.notification?.body);
   }
 
   FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-      'notif_title',
-      message.notification?.title ?? 'Notifikasi',
-    );
-    await prefs.setString('notif_body', message.notification?.body ?? '');
-    await prefs.setBool('notif_visible', true);
+    await saveNotifToPrefs(message.notification?.title, message.notification?.body);
 
     incomingNotifNotifier.value = {
       'title': message.notification?.title ?? 'Notifikasi',
@@ -70,16 +50,8 @@ void main() async {
   await messaging.requestPermission(alert: true, badge: true, sound: true);
 
   FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
-    final prefs = await SharedPreferences.getInstance();
+    await saveNotifToPrefs(message.notification?.title, message.notification?.body);
 
-    await prefs.setString(
-      'notif_title',
-      message.notification?.title ?? 'Notifikasi',
-    );
-    await prefs.setString('notif_body', message.notification?.body ?? '');
-    await prefs.setBool('notif_visible', true);
-
-    // Tetap update notifier agar UI langsung reaktif
     incomingNotifNotifier.value = {
       'title': message.notification?.title ?? 'Notifikasi',
       'body': message.notification?.body ?? '',
@@ -96,6 +68,8 @@ void main() async {
       'body': prefs.getString('notif_body') ?? '',
     };
   }
+
+  await checkInventoryReminderOnStartup(prefs);
 
   // await Hive.initFlutter();
 

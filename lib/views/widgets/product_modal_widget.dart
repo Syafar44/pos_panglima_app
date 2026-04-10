@@ -7,6 +7,7 @@ import 'package:pos_panglima_app/utils/convert.dart';
 import 'package:pos_panglima_app/utils/modal_handling.dart';
 import 'package:pos_panglima_app/utils/modal_insufficient_stock.dart';
 import 'package:pos_panglima_app/utils/quantity_timer_mixin.dart';
+import 'package:pos_panglima_app/utils/stock_parser.dart';
 import 'package:pos_panglima_app/views/components/ui/step_button.dart';
 
 class ProductModalWidget extends StatefulWidget {
@@ -139,38 +140,10 @@ class _ProductModalWidgetState extends State<ProductModalWidget>
       final String message = e.response?.data['message'] ?? 'Terjadi kesalahan';
 
       if (message.contains('insufficient_stock')) {
-        // Ambil bagian setelah "insufficient_stock: "
-        final String stockPart = message.replaceFirst(
-          'insufficient_stock: ',
-          '',
-        );
-
-        // Pecah per item berdasarkan "; "
-        final List<String> stockItems = stockPart.split('; ');
-
-        // Ubah jadi list map yang rapi
-        final List<Map<String, String>> parsedItems = stockItems.map((item) {
-          // Contoh item: "Adonan Bakpia (ITM123): required 1.00, stock 0.00"
-          final RegExp regex = RegExp(
-            r'^(.*?): required ([\d.]+), stock ([\d.]+)$',
-          );
-          final match = regex.firstMatch(item.trim());
-          final String cleanName = (match?.group(1) ?? item).replaceAll(
-            RegExp(r'\s*\(ITM\d+\)'),
-            '',
-          );
-          return {
-            'name': cleanName,
-            'required': match?.group(2) ?? '-',
-            'stock': match?.group(3) ?? '-',
-          };
-        }).toList();
-
+        final parsedItems = parseInsufficientStock(message);
         showDialog(
-          context: widget.dialogContext,
-          builder: (context) {
-            return ModalInsufficientStock(items: parsedItems);
-          },
+          context: context,
+          builder: (_) => ModalInsufficientStock(items: parsedItems),
         );
       }
     }

@@ -4,6 +4,7 @@ import 'package:device_info_plus/device_info_plus.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:network_info_plus/network_info_plus.dart';
+import 'package:pos_panglima_app/data/app_config.dart';
 import 'package:pos_panglima_app/services/auth_service.dart';
 import 'package:pos_panglima_app/services/bluetooth_printer_service.dart';
 import 'package:blue_thermal_printer/blue_thermal_printer.dart';
@@ -12,7 +13,7 @@ import 'package:pos_panglima_app/services/storage/error_log_manager.dart';
 import 'package:pos_panglima_app/utils/loader_utils.dart';
 import 'package:pos_panglima_app/utils/modal_handling.dart';
 import 'package:pos_panglima_app/utils/snackbar_util.dart';
-import 'package:pos_panglima_app/views/widgets/endsift_modal.dart';
+import 'package:pos_panglima_app/views/widgets/endShift_modal.dart';
 
 class PengaturanPage extends StatefulWidget {
   const PengaturanPage({super.key});
@@ -201,7 +202,7 @@ class _PengaturanPageState extends State<PengaturanPage> {
                       ),
                       const SizedBox(height: 10),
                       Text(
-                        'V.1.0.0',
+                        'V.${AppConfig.version}',
                         style: TextStyle(
                           color: Colors.grey[400],
                           fontSize: 12,
@@ -305,7 +306,7 @@ class _PengaturanPageState extends State<PengaturanPage> {
                 showDialog(
                   context: context,
                   barrierDismissible: true,
-                  builder: (BuildContext context) => EndsiftModal(),
+                  builder: (BuildContext context) => EndShiftModal(),
                 );
               },
               icon: Icon(Icons.logout, color: Colors.red[700], size: 20),
@@ -378,68 +379,6 @@ class _PengaturanPageState extends State<PengaturanPage> {
       contentPadding: EdgeInsets.symmetric(horizontal: 20),
     );
   }
-
-  // Widget printer() {
-  //   return Column(
-  //     children: [
-  //       Container(
-  //         color: Colors.black12,
-  //         padding: EdgeInsets.all(16.0),
-  //         child: Row(
-  //           mainAxisAlignment: MainAxisAlignment.spaceBetween,
-  //           children: [
-  //             Text(
-  //               'Daftar Printer',
-  //               style: TextStyle(fontSize: 16.0, fontWeight: FontWeight.bold),
-  //             ),
-  //             Row(
-  //               spacing: 10.0,
-  //               children: [Icon(Icons.print), Icon(Icons.more_vert)],
-  //             ),
-  //           ],
-  //         ),
-  //       ),
-  //       Expanded(
-  //         child: devices.isEmpty
-  //             ? Center(child: Text("Tidak ada printer ditemukan"))
-  //             : ListView.builder(
-  //                 itemCount: devices.length,
-  //                 itemBuilder: (context, i) {
-  //                   final d = devices[i];
-  //                   return ListTile(
-  //                     leading: Icon(Icons.bluetooth),
-  //                     title: Text(d.name ?? "Unknown"),
-  //                     subtitle: Text(d.address ?? "-"),
-  //                     trailing: Icon(Icons.chevron_right),
-  //                     onTap: () => connectPrinter(d),
-  //                   );
-  //                 },
-  //               ),
-  //       ),
-  //       Container(
-  //         width: double.infinity,
-  //         padding: EdgeInsets.symmetric(horizontal: 20.0, vertical: 10.0),
-  //         child: ElevatedButton(
-  //           onPressed: () {
-  //             setState(() {
-  //               scanDevices();
-  //             });
-  //           },
-  //           style: IconButton.styleFrom(
-  //             backgroundColor: isScanning ? Colors.grey[300] : Colors.amber,
-  //             shape: RoundedRectangleBorder(
-  //               borderRadius: BorderRadius.circular(6),
-  //             ),
-  //           ),
-  //           child: Text(
-  //             'Scanning Printer',
-  //             style: TextStyle(color: Colors.black87),
-  //           ),
-  //         ),
-  //       ),
-  //     ],
-  //   );
-  // }
 
   Widget printer() {
     return Column(
