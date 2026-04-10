@@ -20,7 +20,7 @@ class SnackbarUtil {
         break;
       case SnackBarStatus.error:
         backgroundColor =
-            Colors.red.shade900; // Lebih gelap agar teks putih kontras
+            Colors.red.shade900;
         icon = Icons.error_outline_rounded;
         break;
       case SnackBarStatus.warning:

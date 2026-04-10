@@ -5,25 +5,26 @@ import 'package:intl/intl.dart';
 import 'package:pos_panglima_app/services/auth_service.dart';
 import 'package:pos_panglima_app/services/helper/dio_client.dart';
 import 'package:pos_panglima_app/services/report_service.dart';
-import 'package:pos_panglima_app/services/sift_service.dart';
+import 'package:pos_panglima_app/services/shift_service.dart';
 import 'package:pos_panglima_app/services/storage/shift_storage_service.dart';
 import 'package:pos_panglima_app/utils/convert.dart';
 import 'package:pos_panglima_app/utils/loader_utils.dart';
 import 'package:pos_panglima_app/utils/modal_handling.dart';
+import 'package:pos_panglima_app/utils/rupiah_formatter.dart';
 import 'package:pos_panglima_app/utils/snackbar_util.dart';
 import 'package:pos_panglima_app/views/pages/login_page.dart';
 import 'package:pos_panglima_app/views/widgets/confirm_modal.dart';
 
-class EndsiftModal extends StatefulWidget {
-  const EndsiftModal({super.key});
+class EndShiftModal extends StatefulWidget {
+  const EndShiftModal({super.key});
 
   @override
-  State<EndsiftModal> createState() => _EndsiftModalState();
+  State<EndShiftModal> createState() => _EndShiftModalState();
 }
 
-class _EndsiftModalState extends State<EndsiftModal> {
+class _EndShiftModalState extends State<EndShiftModal> {
   final apiClient = ApiClient();
-  late final SiftService siftService;
+  late final ShiftService shiftService;
   late final AuthService authService;
   late final ReportService reportService;
   Map<String, dynamic>? profile;
@@ -41,7 +42,7 @@ class _EndsiftModalState extends State<EndsiftModal> {
   void initState() {
     super.initState();
     authService = AuthService(apiClient.dio);
-    siftService = SiftService(apiClient.dio);
+    shiftService = ShiftService(apiClient.dio);
     reportService = ReportService(apiClient.dio);
 
     getProfile();
@@ -90,10 +91,6 @@ class _EndsiftModalState extends State<EndsiftModal> {
 
   Future<void> _deleteIdShift() async {
     await ShiftStorageService.clearShift();
-  }
-
-  int parseRupiah(String text) {
-    return int.tryParse(text.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
   }
 
   Map<String, dynamic> buildPayload() {
@@ -383,13 +380,13 @@ class _EndsiftModalState extends State<EndsiftModal> {
       final confirm = await showConfirmModal(
         'Konfirmasi Akhiri Shift',
         'Apakah Anda yakin ingin mengakhiri shift ini?',
-      );  
+      );
 
       if (!confirm) return;
 
       final payload = buildPayload();
 
-      await siftService.endShift(shiftId!, payload);
+      await shiftService.endShift(shiftId!, payload);
 
       if (!mounted) return;
 
@@ -438,10 +435,12 @@ class _EndsiftModalState extends State<EndsiftModal> {
         child: isLoading || isLoadingProfile
             ? SizedBox(
                 height: 300,
-                child: Center(child: ModernLoading(
-                  timeout: const Duration(seconds: 10),
-                  onRetry: () {},
-                )),
+                child: Center(
+                  child: ModernLoading(
+                    timeout: const Duration(seconds: 10),
+                    onRetry: () {},
+                  ),
+                ),
               )
             : SingleChildScrollView(
                 padding: const EdgeInsets.all(24),
@@ -647,26 +646,6 @@ class _EndsiftModalState extends State<EndsiftModal> {
           ),
         ),
       ],
-    );
-  }
-}
-
-class RupiahFormatter extends TextInputFormatter {
-  final formatter = NumberFormat.currency(
-    locale: 'id_ID',
-    symbol: 'Rp ',
-    decimalDigits: 0,
-  );
-
-  @override
-  TextEditingValue formatEditUpdate(oldValue, newValue) {
-    final text = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
-    if (text.isEmpty) return const TextEditingValue(text: '');
-
-    final result = formatter.format(int.parse(text));
-    return TextEditingValue(
-      text: result,
-      selection: TextSelection.collapsed(offset: result.length),
     );
   }
 }

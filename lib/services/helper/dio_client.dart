@@ -3,16 +3,18 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class ApiClient {
+  static final ApiClient _instance = ApiClient._internal();
+  factory ApiClient() => _instance;
+
   final Dio dio = Dio();
   final storage = const FlutterSecureStorage();
 
-  ApiClient() {
+  ApiClient._internal() {
     dio.options = BaseOptions(
       baseUrl: dotenv.env['BASE_URL']!,
       connectTimeout: const Duration(seconds: 30),
       receiveTimeout: const Duration(seconds: 30),
       headers: {
-        // "Content-Type": "application/json",
         "apikey": dotenv.env['API_KEY']!,
       },
     );

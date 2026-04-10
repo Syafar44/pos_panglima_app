@@ -196,7 +196,7 @@ class SkeletonLoader {
         children: [
           Column(
             children: List.generate(
-              3,
+              2,
               (index) => Container(
                 margin: EdgeInsets.only(bottom: 24),
                 height: 150, // sesuaikan tinggi

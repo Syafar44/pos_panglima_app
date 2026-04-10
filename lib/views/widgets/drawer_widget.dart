@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:pos_panglima_app/data/app_config.dart';
 import 'package:pos_panglima_app/data/notifiers.dart';
 import 'package:pos_panglima_app/services/storage/shift_storage_service.dart';
 import 'package:pos_panglima_app/views/pages/login_page.dart';
-import 'package:pos_panglima_app/views/widgets/endsift_modal.dart';
+import 'package:pos_panglima_app/views/widgets/endShift_modal.dart';
+import 'package:pos_panglima_app/views/widgets_tree.dart';
 
 List<Map<String, dynamic>> list = [
   {'label': 'Pesanan Baru', 'icon': Icon(Icons.shopping_cart)},
@@ -24,13 +26,18 @@ class DrawerWidget extends StatefulWidget {
   State<DrawerWidget> createState() => _DrawerWidgetState();
 }
 
-class _DrawerWidgetState extends State<DrawerWidget> {
-  // final String logo = 'assets/images/logo.png';
+class _DrawerWidgetState extends State<DrawerWidget>
+    with TickerProviderStateMixin {
+  late AnimationController _controller;
   bool? hasShift;
 
   @override
   void initState() {
     super.initState();
+    _controller = AnimationController(
+      duration: const Duration(seconds: 1),
+      vsync: this,
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       precacheImage(const AssetImage('assets/images/logo.png'), context);
     });
@@ -45,12 +52,32 @@ class _DrawerWidgetState extends State<DrawerWidget> {
   }
 
   @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _handlePress() async {
+    if (_controller.isAnimating) return;
+
+    _controller.forward(from: 0.0);
+
+    await Future.delayed(const Duration(seconds: 1));
+
+    if (mounted) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const WidgetTree()),
+      );
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Drawer(
       backgroundColor: Colors.white,
       child: Column(
         children: [
-          // --- HEADER DRAWER ---
           Container(
             height: 100, // Sedikit lebih tinggi agar tidak sesak
             width: double.infinity,
@@ -101,13 +128,40 @@ class _DrawerWidgetState extends State<DrawerWidget> {
                         ),
                       ),
                       Text(
-                        "Versi 1.0.0",
+                        "Versi ${AppConfig.version}",
                         style: TextStyle(
                           fontSize: 12.0,
                           color: Colors.grey[600],
                         ),
                       ),
                     ],
+                  ),
+                ),
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: _handlePress,
+                    borderRadius: BorderRadius.circular(50),
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.red[50],
+                        border: Border.all(color: Colors.black12),
+                      ),
+                      child: RotationTransition(
+                        // Tambahkan baris ini untuk menghubungkan controller dengan animasi
+                        turns: _controller,
+                        child: Transform.flip(
+                          flipX: true,
+                          child: Icon(
+                            Icons.sync_rounded,
+                            size: 20,
+                            color: Colors.red[300],
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -197,7 +251,7 @@ class _DrawerWidgetState extends State<DrawerWidget> {
                   } else {
                     showDialog(
                       context: context,
-                      builder: (context) => const EndsiftModal(),
+                      builder: (context) => const EndShiftModal(),
                     );
                   }
                 },

@@ -30,9 +30,7 @@ class _SplashScreenState extends State<SplashScreen> {
 
     if (!mounted) return;
 
-    if (token != null 
-      && !isTokenExpired(token) && result != null
-    ) {
+    if (token != null && !isTokenExpired(token) && result != null) {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (_) => const WidgetTree()),

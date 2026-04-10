@@ -9,10 +9,10 @@ import 'package:pos_panglima_app/services/helper/dio_client.dart';
 import 'package:pos_panglima_app/services/menu_service.dart';
 import 'package:pos_panglima_app/services/storage/shift_storage_service.dart';
 import 'package:pos_panglima_app/utils/convert.dart';
-import 'package:pos_panglima_app/utils/loader_utils.dart';
 import 'package:pos_panglima_app/utils/modal_handling.dart';
 import 'package:pos_panglima_app/utils/modal_insufficient_stock.dart';
 import 'package:pos_panglima_app/utils/skeleton_loader.dart';
+import 'package:pos_panglima_app/utils/stock_parser.dart';
 import 'package:pos_panglima_app/views/components/ui/cart_item_tile.dart';
 import 'package:pos_panglima_app/views/components/ui/product_card.dart';
 import 'package:pos_panglima_app/views/pages/payment_page.dart';
@@ -70,33 +70,10 @@ class _PesananBaruPageState extends State<PesananBaruPage>
       final String message = e.response?.data['message'] ?? 'Terjadi kesalahan';
 
       if (message.contains('insufficient_stock')) {
-        final String stockPart = message.replaceFirst(
-          'insufficient_stock: ',
-          '',
-        );
-        final List<String> stockItems = stockPart.split('; ');
-
-        final List<Map<String, String>> parsedItems = stockItems.map((item) {
-          final RegExp regex = RegExp(
-            r'^(.*?): required ([\d.]+), stock ([\d.]+)$',
-          );
-          final match = regex.firstMatch(item.trim());
-          final String cleanName = (match?.group(1) ?? item).replaceAll(
-            RegExp(r'\s*\(ITM\d+\)'),
-            '',
-          );
-          return {
-            'name': cleanName,
-            'required': match?.group(2) ?? '-',
-            'stock': match?.group(3) ?? '-',
-          };
-        }).toList();
-
+        final parsedItems = parseInsufficientStock(message);
         showDialog(
           context: context,
-          builder: (context) {
-            return ModalInsufficientStock(items: parsedItems);
-          },
+          builder: (_) => ModalInsufficientStock(items: parsedItems),
         );
       }
       loadCart();
@@ -127,22 +104,6 @@ class _PesananBaruPageState extends State<PesananBaruPage>
       loadCart();
     }
   }
-
-  // void _startDecreasing(int id) {
-  //   _timer = Timer.periodic(_interval, (_) {
-  //     _decreaseQuantity(id);
-  //   });
-  // }
-
-  // void _startIncreasing(int id) {
-  //   _timer = Timer.periodic(_interval, (_) {
-  //     _increaseQuantity(id);
-  //   });
-  // }
-
-  // void _stopTimer() {
-  //   _timer?.cancel();
-  // }
 
   List<Map<String, dynamic>> cartItems = [];
   int totalPayment = 0;
@@ -321,19 +282,28 @@ class _PesananBaruPageState extends State<PesananBaruPage>
 
     try {
       await cartService.postCart(payload);
-    } catch (e) {
+    } on DioException catch (e) {
+      final message = e.response?.data['message'] ?? 'Terjadi kesalahan';
       if (!mounted) return;
-      showDialog(
-        context: context,
-        builder: (context) {
-          return ModalHandling(
-            type: 'warning',
-            title: 'Gagal menambahkan item',
-            description:
-                'Terjadi kendala saat menambahkan item. Silakan coba kembali.',
-          );
-        },
-      );
+      if (message.contains('insufficient_stock')) {
+        final parsedItems = parseInsufficientStock(message);
+        showDialog(
+          context: context,
+          builder: (_) => ModalInsufficientStock(items: parsedItems),
+        );
+      } else {
+        showDialog(
+          context: context,
+          builder: (context) {
+            return ModalHandling(
+              type: 'warning',
+              title: 'Gagal menambahkan item',
+              description:
+                  'Terjadi kendala saat menambahkan item. Silakan coba kembali.',
+            );
+          },
+        );
+      }
     } finally {
       onSaved();
     }
@@ -811,7 +781,12 @@ class _PesananBaruPageState extends State<PesananBaruPage>
                           child: InkWell(
                             onTap: () {
                               selectedPageNotifier.value = 3;
-                              incomingNotifNotifier.value = null;
+                              // Inventory reminder tidak boleh dihapus manual —
+                              // hanya hilang setelah semua surat jalan dikonfirmasi
+                              if (incomingNotifNotifier.value?['type'] !=
+                                  'inventory') {
+                                incomingNotifNotifier.value = null;
+                              }
                             },
                             child: Padding(
                               padding: const EdgeInsets.all(
