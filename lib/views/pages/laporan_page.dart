@@ -156,7 +156,12 @@ class _LaporanPageState extends State<LaporanPage> {
           child: isLoadingData
               ? Padding(
                   padding: const EdgeInsets.all(24.0),
-                  child: SkeletonLoader.detailLaporanSkeleton(),
+                  child: SkeletonLoader.detailLaporanSkeleton(
+                    timeout: const Duration(seconds: 10),
+                    onRetry: () {
+                      if (shiftId != null) getData(shiftId);
+                    },
+                  ),
                 )
               : inventoryIsEmpty
               ? _buildEmptyState()

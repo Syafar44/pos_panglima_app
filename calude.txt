@@ -1,22 +1,3 @@
-buatkan sebuah file issue.md di root project berisi catatan perbaikan serta perbaikan apa saja yang musti implementasikan oleh junior programmer atau ai model yang lebih murah.
+dari project ini @pubspec.yaml  
 
-bagi perbaikannya sesuai dengan folder dan file yang ada
-
-jelaskan tahapan-tahapan yang harus dilakukan untuk mengimplementasikan perbaikan tersebut, anggap nanti yang mengimplementasikan adalah junior programmer atau model ai yang lebih murah
-
-
-
-
-
-buatkan branch fix/issue-high-priority, 
-
-link issuenya :
-
-https://github.com/Syafar44/pos_panglima_app/issues/1
-https://github.com/Syafar44/pos_panglima_app/issues/2
-https://github.com/Syafar44/pos_panglima_app/issues/3
-https://github.com/Syafar44/pos_panglima_app/issues/4
-https://github.com/Syafar44/pos_panglima_app/issues/5
-https://github.com/Syafar44/pos_panglima_app/issues/6
-
-lalu buat PR di github dan selesiakan issue nya di pr tersebut
+saya ingin menambahakn funsgi barcode scanner, untuk sambungan barcode nya menggunakan bluetooth, apakah perlu package tambahan pada project ini atau tidak, harapan saya api dari menu terutama list proeduknya mempunyai barcode yang bisa di scaan dan habis di sceen maka logikannya adalah mencari produk dengan barcode yang sesuai lalau langsung menambahkan produk tersebut ke keranjang, mulai sesi ini dengan menjawab pertanyaan saya tanpa merubah code apapun 

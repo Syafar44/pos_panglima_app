@@ -63,7 +63,7 @@ class _PaymentPageState extends State<PaymentPage> {
   final TextEditingController _customAmountController = TextEditingController();
   final TextEditingController _voucherController = TextEditingController();
   final TextEditingController _keteranganCompliment = TextEditingController();
-  final FocusNode _voucherFocusNode = FocusNode();
+  // final FocusNode _voucherFocusNode = FocusNode();
 
   int roundToNearestTenThousand(int num) {
     return ((num + 9999) ~/ 10000) * 10000;
@@ -85,11 +85,13 @@ class _PaymentPageState extends State<PaymentPage> {
   void initState() {
     super.initState();
 
-    _bluetoothSubscription = BluetoothPrinterService.bluetooth.onStateChanged().listen((state) {
-      setState(() {
-        connectedPrinter = BluetoothPrinterService.connectedPrinter;
-      });
-    });
+    _bluetoothSubscription = BluetoothPrinterService.bluetooth
+        .onStateChanged()
+        .listen((state) {
+          setState(() {
+            connectedPrinter = BluetoothPrinterService.connectedPrinter;
+          });
+        });
 
     authService = AuthService(apiClient.dio);
     methodService = MethodService(apiClient.dio);
@@ -263,7 +265,10 @@ class _PaymentPageState extends State<PaymentPage> {
       } else {
         final proceed = await showRemarksModal();
 
-        if (!proceed) return;
+        if (!proceed) {
+          setState(() => isLoading = false);
+          return;
+        }
 
         Map<String, dynamic> payloadOrder = {
           "customers_id": 16, // default
@@ -492,7 +497,7 @@ class _PaymentPageState extends State<PaymentPage> {
               actionsPadding: const EdgeInsets.fromLTRB(0, 0, 16, 16),
               actions: [
                 TextButton(
-                  onPressed: () => Navigator.pop(context, false),
+                  onPressed: () => {Navigator.pop(context, false)},
                   style: TextButton.styleFrom(
                     foregroundColor: Colors.grey.shade700,
                   ),
@@ -1488,11 +1493,16 @@ class _PaymentPageState extends State<PaymentPage> {
                                 ),
                               ),
                               child: isLoading
-                                  ? ModernLoading(
-                                      size: 24,
-                                      strokeWidth: 3,
-                                      timeout: const Duration(seconds: 10),
-                                      onRetry: () {},
+                                  ? SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 3,
+                                        valueColor:
+                                            AlwaysStoppedAnimation<Color>(
+                                              Colors.amber,
+                                            ),
+                                      ),
                                     )
                                   : const Text(
                                       'Selesaikan Pembayaran',
@@ -1619,6 +1629,9 @@ class _PaymentPageState extends State<PaymentPage> {
       children: orderMethods.map((method) {
         String name = method['name'] ?? '';
         int id = method['id'] ?? 0;
+        if (selectedTab == 1 && id == 4) {
+          return SizedBox.shrink();
+        }
         return CustomChipCheckbox(
           label: name,
           isSelected: selectedMethodName == name,

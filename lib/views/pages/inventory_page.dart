@@ -225,7 +225,13 @@ class _InventoryPageState extends State<InventoryPage> {
                 child: isLoadingInventory || isLoadingCustomerId
                     ? Padding(
                         padding: const EdgeInsets.all(24),
-                        child: SkeletonLoader.detailInventorySkeleton(),
+                        child: SkeletonLoader.detailInventorySkeleton(
+                          timeout: const Duration(seconds: 10),
+                          onRetry: () {
+                            setState(() => isLoadingInventory = true);
+                            getInventoryTransfer(customerId);
+                          },
+                        ),
                       )
                     : ListView.builder(
                         // Menggunakan ListView.builder lebih efisien memori

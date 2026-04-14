@@ -459,8 +459,8 @@ class _PesananBaruPageState extends State<PesananBaruPage>
                         ? Padding(
                             padding: const EdgeInsets.all(16.0),
                             child: SkeletonLoader.menuSkeleton(
-                              const Duration(seconds: 10),
-                              () {
+                              timeout: const Duration(seconds: 10),
+                              onRetry: () {
                                 setState(() => isLoadingMenu = true);
                                 getMenu();
                               },

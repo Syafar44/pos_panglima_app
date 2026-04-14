@@ -43,11 +43,13 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
   void initState() {
     super.initState();
 
-    _bluetoothSubscription = BluetoothPrinterService.bluetooth.onStateChanged().listen((state) {
-      setState(() {
-        connectedPrinter = BluetoothPrinterService.connectedPrinter;
-      });
-    });
+    _bluetoothSubscription = BluetoothPrinterService.bluetooth
+        .onStateChanged()
+        .listen((state) {
+          setState(() {
+            connectedPrinter = BluetoothPrinterService.connectedPrinter;
+          });
+        });
 
     authService = AuthService(apiClient.dio);
     orderService = OrderService(apiClient.dio);
@@ -286,7 +288,13 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
                   child: isLoadingOrdersList || isLoadingUserId
                       ? Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 14.0),
-                          child: SkeletonLoader.listHistorySkeleton(),
+                          child: SkeletonLoader.listHistorySkeleton(
+                            timeout: const Duration(seconds: 10),
+                            onRetry: () {
+                              setState(() => isLoadingOrdersList = true);
+                              _fetchOrders(userId!);
+                            },
+                          ),
                         )
                       : Stack(
                           children: [
@@ -533,7 +541,12 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
           child: isLoadingOrdersDetail || isLoadingUserId
               ? Padding(
                   padding: const EdgeInsets.all(0),
-                  child: SkeletonLoader.detailHistorySkeleton(),
+                  child: SkeletonLoader.detailHistorySkeleton(
+                    timeout: const Duration(seconds: 10),
+                    onRetry: () {
+                      if (orderId != null) _fetchOrderDetail(orderId!);
+                    },
+                  ),
                 )
               : Column(
                   children: [
