@@ -4,9 +4,9 @@ import 'package:pos_panglima_app/services/cart_service.dart';
 import 'package:pos_panglima_app/services/helper/dio_client.dart';
 import 'package:pos_panglima_app/services/storage/shift_storage_service.dart';
 import 'package:pos_panglima_app/utils/convert.dart';
-import 'package:pos_panglima_app/utils/modal_handling.dart';
 import 'package:pos_panglima_app/utils/modal_insufficient_stock.dart';
 import 'package:pos_panglima_app/utils/quantity_timer_mixin.dart';
+import 'package:pos_panglima_app/utils/snackbar_util.dart';
 import 'package:pos_panglima_app/utils/stock_parser.dart';
 import 'package:pos_panglima_app/views/components/ui/step_button.dart';
 
@@ -50,6 +50,7 @@ class _ProductModalWidgetState extends State<ProductModalWidget>
   final TextEditingController diskonController = TextEditingController();
   bool selectedUnit = false;
   bool? hasShift;
+  bool isSubmitting = false;
 
   void _decreaseQuantity() {
     if (quantity > 1) setState(() => quantity--);
@@ -96,6 +97,9 @@ class _ProductModalWidgetState extends State<ProductModalWidget>
   }
 
   void savedToCart() async {
+    if (isSubmitting) return;
+    setState(() => isSubmitting = true);
+
     final props = widget.props ?? [];
 
     final mergedProps = props.map<Map<String, dynamic>>((item) {
@@ -146,6 +150,8 @@ class _ProductModalWidgetState extends State<ProductModalWidget>
           builder: (_) => ModalInsufficientStock(items: parsedItems),
         );
       }
+    } finally {
+      if (mounted) setState(() => isSubmitting = false);
     }
   }
 
@@ -158,14 +164,21 @@ class _ProductModalWidgetState extends State<ProductModalWidget>
   }
 
   void _showWarningShift() {
-    showDialog(
-      context: context,
-      builder: (context) => ModalHandling(
-        type: 'warning',
-        title: 'Perhatian',
-        description:
-            'Shift belum dimulai. Mulai shift terlebih dahulu untuk melakukan transaksi.',
-      ),
+    // showDialog(
+    //   context: context,
+    //   builder: (context) => ModalHandling(
+    //     type: 'warning',
+    //     title: 'Perhatian',
+    //     description:
+    //         'Shift belum dimulai. Mulai shift terlebih dahulu untuk melakukan transaksi.',
+    //   ),
+    // );
+    SnackbarUtil.show(
+      context,
+      title: "Mulai Shift terlebih dahulu",
+      message:
+          "Shift belum dimulai. Mulai shift terlebih dahulu untuk melakukan transaksi.",
+      status: SnackBarStatus.warning,
     );
   }
 
@@ -742,7 +755,9 @@ class _ProductModalWidgetState extends State<ProductModalWidget>
         widget.maxProduk == 0 ||
         totalSelectedProps == (widget.maxProduk! * quantity);
 
-    Color btnColor = isPropsValid ? Colors.amber : Colors.grey.shade300;
+    Color btnColor = isPropsValid && !isSubmitting
+        ? Colors.amber
+        : Colors.grey.shade300;
 
     return ElevatedButton(
       style: ElevatedButton.styleFrom(
@@ -752,27 +767,42 @@ class _ProductModalWidgetState extends State<ProductModalWidget>
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
-      onPressed: () {
-        // 1. Cek Shift
-        if (hasShift == false) {
-          // if (hasShift == true) {
-          _showWarningShift();
-          return;
-        }
+      onPressed: isSubmitting
+          ? null
+          : () {
+              // 1. Cek Shift
+              if (hasShift == false) {
+                _showWarningShift();
+                return;
+              }
 
-        // 2. Cek Validasi Produk (Topping/Props)
-        if (!isPropsValid) {
-          // Opsional: Beri toast/snackbar "Pilihan belum lengkap"
-          return;
-        }
+              // 2. Cek Validasi Produk (Topping/Props)
+              if (!isPropsValid) {
+                return;
+              }
 
-        // 3. Eksekusi
-        savedToCart();
-      },
-      child: const Text(
-        'Simpan',
-        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-      ),
+              // 3. Eksekusi
+              savedToCart();
+            },
+      child: isSubmitting
+          ? Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16.0,
+                vertical: 2.0,
+              ),
+              child: const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.black54,
+                ),
+              ),
+            )
+          : const Text(
+              'Simpan',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
     );
   }
 }

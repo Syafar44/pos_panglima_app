@@ -624,6 +624,7 @@ class _PaymentPageState extends State<PaymentPage> {
   Future<void> paymentSuccessModal(int kembalian) async {
     showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (context) {
         return AlertDialog(
           backgroundColor: Colors.white,

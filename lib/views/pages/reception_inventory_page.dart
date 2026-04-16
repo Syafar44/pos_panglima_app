@@ -75,16 +75,11 @@ class _ReceptionInventoryPageState extends State<ReceptionInventoryPage> {
       setState(() => isLoading = false);
     } catch (e) {
       if (!mounted) return;
-      showDialog(
-        context: context,
-        builder: (context) {
-          return ModalHandling(
-            type: 'warning',
-            title: 'Gagal memuat data inventory',
-            description:
-                'Terjadi kendala saat mengambil data inventory. Mohon periksa koneksi atau coba kembali.',
-          );
-        },
+      SnackbarUtil.show(
+        context,
+        title: "Gagal memuat data inventory",
+        message: "Terjadi kendala saat mengambil data inventory. Mohon periksa koneksi atau coba kembali.",
+        status: SnackBarStatus.error,
       );
     }
   }
@@ -101,16 +96,11 @@ class _ReceptionInventoryPageState extends State<ReceptionInventoryPage> {
       });
     } catch (e) {
       if (!mounted) return;
-      showDialog(
-        context: context,
-        builder: (context) {
-          return ModalHandling(
-            type: 'warning',
-            title: 'Gagal memuat data pengguna',
-            description:
-                'Terjadi kendala saat mengambil data pengguna. Mohon periksa koneksi atau coba kembali.',
-          );
-        },
+      SnackbarUtil.show(
+        context,
+        title: "Gagal memuat data pengguna",
+        message: "Terjadi kendala saat mengambil data pengguna. Mohon periksa koneksi atau coba kembali.",
+        status: SnackBarStatus.error,
       );
     }
   }
@@ -207,16 +197,11 @@ class _ReceptionInventoryPageState extends State<ReceptionInventoryPage> {
     } on DioException catch (e) {
       if (!mounted) return;
       debugPrint("DioException: ${e.response?.data ?? e.message}");
-      showDialog(
-        context: context,
-        builder: (context) {
-          return ModalHandling(
-            type: 'danger',
-            title: 'Gagal melakukan Realisasi',
-            description:
-                'Terjadi kendala saat melakukan Realisasi. Silakan coba kembali.',
-          );
-        },
+      SnackbarUtil.show(
+        context,
+        title: "Gagal menyimpan penerimaan",
+        message: "Terjadi kendala saat menyimpan penerimaan. Mohon periksa koneksi atau coba kembali.",
+        status: SnackBarStatus.error,
       );
     }
   }
@@ -520,79 +505,6 @@ class _ReceptionInventoryPageState extends State<ReceptionInventoryPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Row(
-                  //   mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  //   children: [
-                  //     Column(
-                  //       crossAxisAlignment: CrossAxisAlignment.start,
-                  //       children: [
-                  //         Row(
-                  //           spacing: 10.0,
-                  //           children: [
-                  //             const Text(
-                  //               'No. Po / No. SJ',
-                  //               style: TextStyle(fontWeight: FontWeight.bold),
-                  //             ),
-                  //             Text(
-                  //               ':  ${inventoryDetail?['document_number'] ?? '-'}',
-                  //             ),
-                  //           ],
-                  //         ),
-                  //         Row(
-                  //           spacing: 55.5,
-                  //           children: [
-                  //             Text(
-                  //               'Supplier',
-                  //               style: TextStyle(fontWeight: FontWeight.bold),
-                  //             ),
-                  //             Text(
-                  //               ':  ${inventoryDetail?['from_outlet_hub_name'] ?? '-'}',
-                  //             ),
-                  //           ],
-                  //         ),
-                  //         Row(
-                  //           spacing: 39.4,
-                  //           children: [
-                  //             Text(
-                  //               'Ke Gudang',
-                  //               style: TextStyle(fontWeight: FontWeight.bold),
-                  //             ),
-                  //             Text(
-                  //               ':  ${inventoryDetail?['to_outlet_hub_name'] ?? '-'}',
-                  //             ),
-                  //           ],
-                  //         ),
-                  //       ],
-                  //     ),
-                  //     Column(
-                  //       crossAxisAlignment: CrossAxisAlignment.start,
-                  //       children: [
-                  //         Row(
-                  //           spacing: 63.0,
-                  //           children: [
-                  //             Text(
-                  //               'Tanggal',
-                  //               style: TextStyle(fontWeight: FontWeight.bold),
-                  //             ),
-                  //             Text(
-                  //               ':  ${formatDateTime(inventoryDetail?['date'] ?? '-')}',
-                  //             ),
-                  //           ],
-                  //         ),
-                  //         Row(
-                  //           spacing: 26.0,
-                  //           children: [
-                  //             Text(
-                  //               'Diterima Oleh',
-                  //               style: TextStyle(fontWeight: FontWeight.bold),
-                  //             ),
-                  //             Text(':  ${profile?['name'] ?? '-'}'),
-                  //           ],
-                  //         ),
-                  //       ],
-                  //     ),
-                  //   ],
-                  // ),
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -796,75 +708,6 @@ class _ReceptionInventoryPageState extends State<ReceptionInventoryPage> {
                                           ],
                                         ),
                                       ),
-
-                                      // Kolom Input Realisasi
-                                      // Expanded(
-                                      //   flex: 2,
-                                      //   child: SizedBox(
-                                      //     height: 45,
-                                      //     child: TextField(
-                                      //       controller:
-                                      //           realisasiControllers[item['id']],
-                                      //       keyboardType: TextInputType.number,
-                                      //       textAlign: TextAlign.center,
-                                      //       enabled:
-                                      //           inventoryDetail?['approve'] !=
-                                      //           1,
-                                      //       onTap: () {
-                                      //         setState(() {
-                                      //           focusedItemId = item['id'];
-                                      //         });
-                                      //       },
-                                      //       onEditingComplete: () {
-                                      //         setState(() {
-                                      //           focusedItemId = null;
-                                      //         });
-                                      //         FocusScope.of(context).unfocus();
-                                      //       },
-                                      //       onTapOutside: (_) {
-                                      //         setState(() {
-                                      //           focusedItemId = null;
-                                      //         });
-                                      //       },
-                                      //       style: TextStyle(
-                                      //         fontWeight: FontWeight.bold,
-                                      //         color: item['reject'] > 0
-                                      //             ? Colors.orange
-                                      //             : Colors.blue,
-                                      //       ),
-                                      //       decoration: InputDecoration(
-                                      //         contentPadding:
-                                      //             const EdgeInsets.symmetric(
-                                      //               vertical: 0,
-                                      //             ),
-                                      //         hintText: '0',
-                                      //         filled: true,
-                                      //         fillColor: item['reject'] > 0
-                                      //             ? Colors.orange.shade50
-                                      //             : Colors.blue.shade50,
-                                      //         enabledBorder: OutlineInputBorder(
-                                      //           borderSide: BorderSide(
-                                      //             color: item['reject'] > 0
-                                      //                 ? Colors.orange.shade100
-                                      //                 : Colors.blue.shade100,
-                                      //           ),
-                                      //           borderRadius:
-                                      //               BorderRadius.circular(8),
-                                      //         ),
-                                      //         focusedBorder: OutlineInputBorder(
-                                      //           borderSide: BorderSide(
-                                      //             color: item['reject'] > 0
-                                      //                 ? Colors.orange
-                                      //                 : Colors.blue,
-                                      //             width: 2,
-                                      //           ),
-                                      //           borderRadius:
-                                      //               BorderRadius.circular(8),
-                                      //         ),
-                                      //       ),
-                                      //     ),
-                                      //   ),
-                                      // ),
                                       Expanded(
                                         flex: 2,
                                         child: ValueListenableBuilder<TextEditingValue>(
@@ -900,7 +743,7 @@ class _ReceptionInventoryPageState extends State<ReceptionInventoryPage> {
                                               inputBgColor = Colors.red.shade50;
                                             }
 
-                                            return Container(
+                                            return SizedBox(
                                               height: 45,
                                               child: TextField(
                                                 controller:
@@ -1044,7 +887,7 @@ class _ReceptionInventoryPageState extends State<ReceptionInventoryPage> {
                         // Tombol Aksi
                         SizedBox(
                           width: double
-                              .infinity, // Tombol full width agar lebih mudah ditekan jari
+                              .infinity,
                           height: 48,
                           child: ElevatedButton(
                             onPressed: submitRealisasi,

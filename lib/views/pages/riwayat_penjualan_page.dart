@@ -9,7 +9,7 @@ import 'package:pos_panglima_app/utils/convert.dart';
 import 'package:blue_thermal_printer/blue_thermal_printer.dart';
 import 'package:pos_panglima_app/services/bluetooth_printer_service.dart';
 import 'package:pos_panglima_app/utils/skeleton_loader.dart';
-import 'package:pos_panglima_app/utils/modal_handling.dart';
+import 'package:pos_panglima_app/utils/snackbar_util.dart';
 
 class RiwayatPenjualanPage extends StatefulWidget {
   const RiwayatPenjualanPage({super.key});
@@ -95,16 +95,11 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
       }
     } catch (e) {
       if (!mounted) return;
-      showDialog(
-        context: context,
-        builder: (context) {
-          return ModalHandling(
-            type: 'danger',
-            title: 'Gagal memuat riwayat penjualan',
-            description:
-                'Terjadi kesalahan saat mengambil data riwayat penjualan. Mohon periksa koneksi atau coba kembali.',
-          );
-        },
+      SnackbarUtil.show(
+        context,
+        title: "Gagal memuat riwayat penjualan",
+        message: "Terjadi kesalahan saat mengambil data riwayat penjualan. Mohon periksa koneksi atau coba kembali.",
+        status: SnackBarStatus.error,
       );
     }
   }
@@ -123,16 +118,11 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
       });
     } catch (e) {
       if (!mounted) return;
-      showDialog(
-        context: context,
-        builder: (context) {
-          return ModalHandling(
-            type: 'danger',
-            title: 'Gagal memuat detail',
-            description:
-                'Terjadi kesalahan saat mengambil detail. Mohon periksa koneksi atau coba kembali.',
-          );
-        },
+      SnackbarUtil.show(
+        context,
+        title: "Gagal memuat detail",
+        message: "Terjadi kesalahan saat mengambil detail. Mohon periksa koneksi atau coba kembali.",
+        status: SnackBarStatus.error,
       );
     }
   }
@@ -152,16 +142,11 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
       isLoadingUserId = false;
       debugPrint("Gagal ambil user ID: $e");
       if (!mounted) return;
-      showDialog(
-        context: context,
-        builder: (context) {
-          return ModalHandling(
-            type: 'warning',
-            title: 'Gagal memuat data pengguna',
-            description:
-                'Terjadi kendala saat mengambil data pengguna. Mohon periksa koneksi atau coba kembali.',
-          );
-        },
+      SnackbarUtil.show(
+        context,
+        title: "Gagal memuat data pengguna",
+        message: "Terjadi kesalahan saat mengambil data pengguna. Mohon periksa koneksi atau coba kembali.",
+        status: SnackBarStatus.error,
       );
     }
   }
@@ -185,16 +170,11 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
       );
     } catch (e) {
       if (!mounted) return;
-      showDialog(
-        context: context,
-        builder: (context) {
-          return ModalHandling(
-            type: 'warning',
-            title: 'Gagal mencetak struk',
-            description:
-                'Terjadi kesalahan saat mencetak struk data riwayat penjualan. Mohon coba kembali.',
-          );
-        },
+      SnackbarUtil.show(
+        context,
+        title: "Gagal mencetak struk",
+        message: "Terjadi kesalahan saat mencetak struk. Pastikan printer terhubung dengan benar dan coba kembali.",
+        status: SnackBarStatus.error,
       );
     }
   }
@@ -233,14 +213,14 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
                   child: Container(
                     decoration: BoxDecoration(
                       color: Colors
-                          .grey[100], // Background abu-abu muda agar terlihat kedalam
+                          .grey[100], 
                       borderRadius: BorderRadius.circular(12.0),
                       border: Border.all(color: Colors.grey[300]!),
                     ),
                     child: TextField(
                       controller: controllerSearch,
                       autofocus:
-                          false, // Disarankan false agar keyboard tidak tiba-tiba muncul
+                          false,
                       style: const TextStyle(fontSize: 14.0),
                       decoration: InputDecoration(
                         prefixIcon: const Icon(

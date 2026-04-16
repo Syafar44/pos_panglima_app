@@ -308,13 +308,6 @@ class _UpdateProductModalWidgetState extends State<UpdateProductModalWidget> {
                               fontSize: 18,
                             ),
                           ),
-                          // Text(
-                          //   widget.category,
-                          //   style: TextStyle(
-                          //     color: Colors.grey[600],
-                          //     fontSize: 13,
-                          //   ),
-                          // ),
                         ],
                       ),
                     ),
@@ -521,98 +514,6 @@ class _UpdateProductModalWidgetState extends State<UpdateProductModalWidget> {
                     if (widget.maxQty != null &&
                         (widget.maxQty ?? 0) > 0 &&
                         widget.pos_cart_props != null)
-                      // Column(
-                      //   crossAxisAlignment: CrossAxisAlignment.start,
-                      //   children: [
-                      //     SizedBox(height: 20),
-                      //     Row(
-                      //       mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      //       children: [
-                      //         Text(
-                      //           "Pilih Varian ( $totalSelectedProps / ${(widget.maxQty ?? 0) * quantity} )",
-                      //           style: TextStyle(
-                      //             fontSize: 18,
-                      //             fontWeight: FontWeight.bold,
-                      //           ),
-                      //         ),
-                      //         GestureDetector(
-                      //           onTap: resetVariants,
-                      //           child: Text(
-                      //             "Reset",
-                      //             style: TextStyle(
-                      //               color: Colors.red,
-                      //               fontSize: 16,
-                      //             ),
-                      //           ),
-                      //         ),
-                      //       ],
-                      //     ),
-                      //     SizedBox(height: 12),
-                      //     Wrap(
-                      //       spacing: 10,
-                      //       runSpacing: 10,
-                      //       children: widget.pos_cart_props!.map((e) {
-                      //         final code = e["pos_menus_id"];
-                      //         final propsQuantity = selectedProps[code] ?? 0;
-                      //         final bool isDisabled =
-                      //             totalSelectedProps >=
-                      //             (widget.maxQty ?? 0) * quantity;
-                      //         return GestureDetector(
-                      //           onTap: isDisabled
-                      //               ? null
-                      //               : () => onTapVariant(e),
-                      //           child: Container(
-                      //             padding: EdgeInsets.symmetric(
-                      //               horizontal: 22,
-                      //               vertical: 12,
-                      //             ),
-                      //             decoration: BoxDecoration(
-                      //               color: propsQuantity > 0
-                      //                   ? Colors.amber
-                      //                   : Colors.white,
-                      //               borderRadius: BorderRadius.circular(30),
-                      //               border: Border.all(color: Colors.amber),
-                      //             ),
-                      //             child: Row(
-                      //               mainAxisSize: MainAxisSize.min,
-                      //               children: [
-                      //                 Text(
-                      //                   e["pos_menus_name"],
-                      //                   style: TextStyle(
-                      //                     color: Colors.black,
-                      //                     fontWeight: FontWeight.bold,
-                      //                   ),
-                      //                 ),
-                      //                 if (propsQuantity > 0) ...[
-                      //                   SizedBox(width: 10),
-                      //                   Container(
-                      //                     padding: EdgeInsets.symmetric(
-                      //                       horizontal: 8,
-                      //                       vertical: 3,
-                      //                     ),
-                      //                     decoration: BoxDecoration(
-                      //                       color: Colors.white,
-                      //                       borderRadius: BorderRadius.circular(
-                      //                         12,
-                      //                       ),
-                      //                     ),
-                      //                     child: Text(
-                      //                       propsQuantity.toString(),
-                      //                       style: TextStyle(
-                      //                         fontWeight: FontWeight.bold,
-                      //                       ),
-                      //                     ),
-                      //                   ),
-                      //                 ],
-                      //               ],
-                      //             ),
-                      //           ),
-                      //         );
-                      //       }).toList(),
-                      //     ),
-                      //     SizedBox(height: 20),
-                      //   ],
-                      // ),
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -747,79 +648,6 @@ class _UpdateProductModalWidgetState extends State<UpdateProductModalWidget> {
                           const SizedBox(height: 20),
                         ],
                       ),
-                    // Column(
-                    //   crossAxisAlignment: CrossAxisAlignment.start,
-                    //   children: [
-                    //     Divider(height: 30),
-                    //     // Diskon
-                    //     Text(
-                    //       'Berikan Diskon',
-                    //       style: TextStyle(
-                    //         fontWeight: FontWeight.bold,
-                    //         fontSize: 16,
-                    //       ),
-                    //     ),
-                    //     SizedBox(height: 8),
-                    //     Row(
-                    //       children: [
-                    //         Expanded(
-                    //           child: TextField(
-                    //             controller: diskonController,
-                    //             keyboardType: TextInputType.number,
-                    //             decoration: InputDecoration(
-                    //               hintText: 'Masukkan diskon',
-                    //               border: OutlineInputBorder(
-                    //                 borderRadius: BorderRadius.all(
-                    //                   Radius.circular(10),
-                    //                 ),
-                    //               ),
-                    //             ),
-                    //           ),
-                    //         ),
-                    //         SizedBox(width: 8),
-                    //         ToggleButtons(
-                    //           isSelected: [
-                    //             selectedUnit == false,
-                    //             selectedUnit == true,
-                    //           ],
-                    //           onPressed: (int index) {
-                    //             setState(() {
-                    //               selectedUnit = index == 0 ? false : true;
-                    //             });
-                    //           },
-                    //           borderRadius: BorderRadius.circular(5),
-                    //           color: Colors.black,
-                    //           selectedColor: Colors.white,
-                    //           selectedBorderColor: Colors.amber,
-                    //           fillColor: Colors.amber,
-                    //           children: [
-                    //             Padding(
-                    //               padding: EdgeInsets.symmetric(
-                    //                 horizontal: 17.0,
-                    //                 vertical: 17.0,
-                    //               ),
-                    //               child: Text(
-                    //                 'Rp',
-                    //                 style: TextStyle(color: Colors.black),
-                    //               ),
-                    //             ),
-                    //             Padding(
-                    //               padding: EdgeInsets.symmetric(
-                    //                 horizontal: 17.0,
-                    //                 vertical: 17.0,
-                    //               ),
-                    //               child: Text(
-                    //                 '%',
-                    //                 style: TextStyle(color: Colors.black),
-                    //               ),
-                    //             ),
-                    //           ],
-                    //         ),
-                    //       ],
-                    //     ),
-                    //     SizedBox(height: 16),
-                    //   ],
-                    // ),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [

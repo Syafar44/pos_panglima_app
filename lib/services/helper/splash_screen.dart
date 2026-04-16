@@ -30,7 +30,9 @@ class _SplashScreenState extends State<SplashScreen> {
 
     if (!mounted) return;
 
-    if (token != null && !isTokenExpired(token) && result != null) {
+    if (token != null
+      //  && !isTokenExpired(token) && result != null
+    ) {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (_) => const WidgetTree()),
@@ -70,24 +72,20 @@ class _SplashScreenState extends State<SplashScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Mengambil ukuran layar untuk responsivitas
     final size = MediaQuery.of(context).size;
     final isTablet = size.width > 600;
 
     return Scaffold(
-      // Menggunakan Container untuk background imej geometris
       body: Container(
         width: double.infinity,
         height: double.infinity,
         decoration: const BoxDecoration(
           image: DecorationImage(
-            // Ganti dengan path background geometris maron-amber Anda
             image: AssetImage('assets/images/background.jpg'),
             fit: BoxFit.cover,
           ),
         ),
         child: Container(
-          // Overlay gradasi halus agar logo dan teks lebih pop-out
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter,
@@ -137,7 +135,7 @@ class _SplashScreenState extends State<SplashScreen> {
                       height: 40,
                       child: CircularProgressIndicator(
                         strokeWidth: 4,
-                        strokeCap: StrokeCap.round, // Ujung bulat (Modern)
+                        strokeCap: StrokeCap.round,
                         valueColor: const AlwaysStoppedAnimation<Color>(
                           Colors.amber,
                         ),

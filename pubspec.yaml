@@ -55,6 +55,7 @@ dependencies:
   firebase_messaging: ^16.1.2
   firebase: ^9.0.3
   shimmer: ^3.0.0
+  flutter_barcode_listener: ^0.1.4
 
 dev_dependencies:
   flutter_test:

@@ -7,6 +7,7 @@ import 'package:pos_panglima_app/services/storage/shift_storage_service.dart';
 import 'package:pos_panglima_app/utils/convert.dart';
 import 'package:pos_panglima_app/utils/modal_handling.dart';
 import 'package:pos_panglima_app/utils/skeleton_loader.dart';
+import 'package:pos_panglima_app/utils/snackbar_util.dart';
 
 List<Map<String, dynamic>> laporanOutlet = [
   {'name': 'Penerimaan Penjualan', 'page': 1},
@@ -77,14 +78,12 @@ class _LaporanPageState extends State<LaporanPage> {
       });
     } catch (e) {
       if (!mounted) return;
-      showDialog(
-        context: context,
-        builder: (context) => ModalHandling(
-          type: 'danger',
-          title: 'Gagal memuat data pengguna',
-          description:
-              'Terjadi kendala saat mengambil data pengguna. Mohon periksa koneksi atau coba kembali.',
-        ),
+      SnackbarUtil.show(
+        context,
+        title: "Gagal memuat data pengguna",
+        message:
+            "Terjadi kendala saat mengambil data pengguna. Mohon periksa koneksi atau coba kembali.",
+        status: SnackBarStatus.error,
       );
     }
   }
@@ -443,68 +442,6 @@ class _LaporanPageState extends State<LaporanPage> {
     );
   }
 
-  // ─── SHARED WIDGETS ──────────────────────────────────────────────────────────
-
-  // Widget _buildPeriodFilter() {
-  //   return LayoutBuilder(
-  //     builder: (context, constraints) {
-  //       return Container(
-  //         width: constraints.maxWidth,
-  //         decoration: BoxDecoration(
-  //           color: Colors.white,
-  //           border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
-  //         ),
-  //         child: Theme(
-  //           data: Theme.of(context).copyWith(
-  //             colorScheme: Theme.of(
-  //               context,
-  //             ).colorScheme.copyWith(surface: Colors.white),
-  //           ),
-  //           child: DropdownMenu<String>(
-  //             expandedInsets: EdgeInsets.zero,
-  //             width: constraints.maxWidth,
-  //             menuStyle: MenuStyle(
-  //               backgroundColor: WidgetStateProperty.all(Colors.white),
-  //               surfaceTintColor: WidgetStateProperty.all(Colors.white),
-  //               shape: WidgetStateProperty.all(
-  //                 RoundedRectangleBorder(
-  //                   borderRadius: BorderRadius.only(
-  //                     bottomLeft: Radius.circular(12),
-  //                     bottomRight: Radius.circular(12),
-  //                   ),
-  //                 ),
-  //               ),
-  //             ),
-  //             textStyle: const TextStyle(
-  //               fontWeight: FontWeight.bold,
-  //               fontSize: 14,
-  //             ),
-  //             hintText: 'Pilih Periode Laporan',
-  //             leadingIcon: Icon(
-  //               Icons.calendar_today_rounded,
-  //               color: Colors.amber[900],
-  //               size: 20,
-  //             ),
-  //             inputDecorationTheme: const InputDecorationTheme(
-  //               border: InputBorder.none,
-  //               filled: true,
-  //               fillColor: Colors.white,
-  //               contentPadding: EdgeInsets.symmetric(horizontal: 16.0),
-  //             ),
-  //             dropdownMenuEntries: [
-  //               _buildDateEntry('1h', 'Hari Ini', '28 November 2025'),
-  //               _buildDateEntry('7h', '7 Hari', '21 - 28 Nov 2025'),
-  //               _buildDateEntry('30h', '30 Hari', '29 Okt - 28 Nov 2025'),
-  //             ],
-  //             onSelected: (value) {},
-  //           ),
-  //         ),
-  //       );
-  //     },
-  //   );
-  // }
-
-  /// Tile generik untuk semua breakdown
   Widget _buildBreakdownTile({
     required String label,
     required String subtitle,
@@ -776,47 +713,6 @@ class _LaporanPageState extends State<LaporanPage> {
     );
   }
 
-  // --- HELPER WIDGETS ---
-
-  DropdownMenuEntry<String> _buildDateEntry(
-    String value,
-    String badge,
-    String label,
-  ) {
-    return DropdownMenuEntry<String>(
-      value: value,
-      label: label,
-      // Memberikan style teks label agar lebih clean
-      labelWidget: Text(
-        label,
-        style: const TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.w500,
-          color: Colors.black87,
-        ),
-      ),
-      leadingIcon: Container(
-        margin: const EdgeInsets.only(right: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          // Gunakan warna background yang kontras dengan teks badge
-          color: Colors.amber[50]?.withOpacity(0.8),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: Colors.amber[200]!, width: 1),
-        ),
-        child: Text(
-          badge,
-          style: TextStyle(
-            color: Colors.amber[900],
-            fontWeight: FontWeight.bold,
-            fontSize: 10,
-            letterSpacing: 0.5,
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildSummaryCard({
     required String title,
     required String value,
@@ -864,221 +760,6 @@ class _LaporanPageState extends State<LaporanPage> {
     );
   }
 
-  Widget _buildPaymentMethodTile({
-    required String label,
-    required int count,
-    required double amount,
-    required IconData icon,
-    required VoidCallback onTap,
-  }) {
-    return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          padding: const EdgeInsets.all(16.0),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.grey[300]!),
-          ),
-          child: Row(
-            children: [
-              CircleAvatar(
-                backgroundColor: Colors.grey[50],
-                child: Icon(icon, color: Colors.grey[700], size: 20),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      label,
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    Text(
-                      '$count Penerimaan',
-                      style: TextStyle(color: Colors.grey[500], fontSize: 12),
-                    ),
-                  ],
-                ),
-              ),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    convertIDR(amount),
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
-                    ),
-                  ),
-                  Icon(Icons.chevron_right, color: Colors.grey[400], size: 20),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future _showDetailModal() {
-    // Simulasi data (nanti bisa diganti dengan data dari API/Provider)
-    final List<Map<String, dynamic>> transactions = List.generate(
-      10,
-      (index) => {
-        'id': 'TRX-82934$index',
-        'status': 'Diterima Kasir',
-        'date': '10 Okt 2026, 13:34',
-        'amount': 20000.0,
-      },
-    );
-
-    return showDialog(
-      context: context,
-      builder: (context) {
-        return Dialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          backgroundColor: Colors.white,
-          clipBehavior:
-              Clip.antiAlias, // Biar header tidak nabrak border radius
-          child: SizedBox(
-            width: 600.0,
-            height:
-                MediaQuery.of(context).size.height * 0.7, // Batasi tinggi modal
-            child: Column(
-              children: [
-                // --- HEADER ---
-                Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    border: Border(
-                      bottom: BorderSide(color: Colors.grey.shade300),
-                    ),
-                  ),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 24.0,
-                    vertical: 20.0,
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Pembayaran Tunai',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 20.0,
-                            ),
-                          ),
-                          Text(
-                            '${transactions.length} Transaksi Penerimaan',
-                            style: TextStyle(
-                              fontSize: 14.0,
-                              color: Colors.grey.shade600,
-                            ),
-                          ),
-                        ],
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.search, size: 28.0),
-                        onPressed: () {
-                          // Logika search di sini
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-
-                // --- LIST TRANSAKSI ---
-                Expanded(
-                  child: ListView.separated(
-                    padding: EdgeInsets.zero,
-                    itemCount: transactions.length,
-                    separatorBuilder: (context, index) =>
-                        Divider(height: 1, color: Colors.grey.shade200),
-                    itemBuilder: (context, index) {
-                      final item = transactions[index];
-                      return InkWell(
-                        onTap: () {
-                          // Aksi saat item diklik
-                        },
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 24.0,
-                            vertical: 20.0,
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    item['id'],
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w500,
-                                      fontSize: 16.0,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    item['status'],
-                                    style: TextStyle(
-                                      color: Colors.grey.shade600,
-                                      fontSize: 13,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  Text(
-                                    item['date'],
-                                    style: TextStyle(
-                                      color: Colors.grey.shade500,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    convertIDR(item['amount']),
-                                    style: const TextStyle(
-                                      color: Colors.orange,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 16.0,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
   Widget _buildExpansionCategory({
     required String title,
     required IconData icon,
@@ -1086,7 +767,6 @@ class _LaporanPageState extends State<LaporanPage> {
     bool initiallyExpanded = false,
   }) {
     return Theme(
-      // Menghilangkan garis divider dan splash highlight bawaan yang kaku
       data: Theme.of(context).copyWith(
         dividerColor: Colors.transparent,
         splashColor: Colors.transparent,

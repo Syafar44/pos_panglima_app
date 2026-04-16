@@ -11,7 +11,6 @@ import 'package:blue_thermal_printer/blue_thermal_printer.dart';
 import 'package:pos_panglima_app/services/helper/dio_client.dart';
 import 'package:pos_panglima_app/services/storage/error_log_manager.dart';
 import 'package:pos_panglima_app/utils/loader_utils.dart';
-import 'package:pos_panglima_app/utils/modal_handling.dart';
 import 'package:pos_panglima_app/utils/snackbar_util.dart';
 import 'package:pos_panglima_app/views/widgets/endShift_modal.dart';
 
@@ -124,16 +123,11 @@ class _PengaturanPageState extends State<PengaturanPage> {
       if (!mounted) return;
       isLoadingProfile = false;
       debugPrint("Gagal ambil profile: $e");
-      showDialog(
-        context: context,
-        builder: (context) {
-          return ModalHandling(
-            type: 'danger',
-            title: 'Gagal memuat data pengguna',
-            description:
-                'Terjadi kendala saat mengambil data pengguna. Mohon periksa koneksi atau coba kembali.',
-          );
-        },
+      SnackbarUtil.show(
+        context,
+        title: "Gagal memuat data pengguna",
+        message: "Terjadi kendala saat mengambil data pengguna. Mohon periksa koneksi atau coba kembali.",
+        status: SnackBarStatus.error,
       );
     }
   }

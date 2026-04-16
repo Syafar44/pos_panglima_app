@@ -4,10 +4,9 @@ import 'package:pos_panglima_app/services/auth_service.dart';
 import 'package:pos_panglima_app/services/helper/dio_client.dart';
 import 'package:pos_panglima_app/services/inventory_service.dart';
 import 'package:pos_panglima_app/utils/convert.dart';
-import 'package:pos_panglima_app/utils/loader_utils.dart';
-import 'package:pos_panglima_app/utils/modal_handling.dart';
 import 'package:pos_panglima_app/utils/notif_utils.dart';
 import 'package:pos_panglima_app/utils/skeleton_loader.dart';
+import 'package:pos_panglima_app/utils/snackbar_util.dart';
 import 'package:pos_panglima_app/views/pages/reception_inventory_page.dart';
 
 class InventoryPage extends StatefulWidget {
@@ -55,16 +54,11 @@ class _InventoryPageState extends State<InventoryPage> {
     } catch (e) {
       if (!mounted) return;
       isLoadingCustomerId = false;
-      showDialog(
-        context: context,
-        builder: (context) {
-          return ModalHandling(
-            type: 'danger',
-            title: 'Gagal memuat data pengguna',
-            description:
-                'Terjadi kendala saat mengambil data pengguna. Mohon periksa koneksi atau coba kembali.',
-          );
-        },
+      SnackbarUtil.show(
+        context,
+        title: "Gagal memuat data pengguna",
+        message: "Terjadi kendala saat mengambil data pengguna. Mohon periksa koneksi atau coba kembali.",
+        status: SnackBarStatus.error,
       );
     }
   }
@@ -72,15 +66,19 @@ class _InventoryPageState extends State<InventoryPage> {
   Future<void> getInventoryTransfer(customerId) async {
     try {
       final response = await inventoryService.getList(
-        "page=$selectedPageNumber&limit=10&to_outlet_hub_id=$customerId",
+        page: selectedPageNumber,
+        limit: 10,
+        outletHubId: customerId?.toString() ?? '',
       );
       final list = response.data['data'] as List;
       final count = list.where((item) => (item['approve'] ?? 0) == 0).length;
+      final pagination = response.data['pagination'] as Map<String, dynamic>?;
 
       setState(() {
         inventoryList = list;
         isLoadingInventory = false;
         unapprovedCount = count;
+        paginationInfo = pagination;
       });
 
       if (count > 0) {
@@ -364,40 +362,42 @@ class _InventoryPageState extends State<InventoryPage> {
                         },
                       ),
               ),
-        Container(
-          padding: const EdgeInsets.symmetric(vertical: 2.0, horizontal: 16.0),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            border: Border(
-              top: BorderSide(
-                color: Colors.grey[200]!,
-              ), // Garis halus di atas pagination
+        Builder(builder: (context) {
+          final int totalPages = (paginationInfo?['total_page'] as num?)?.toInt() ?? 1;
+          if (totalPages <= 1) return const SizedBox.shrink();
+
+          return Container(
+            padding: const EdgeInsets.symmetric(vertical: 2.0, horizontal: 16.0),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border(
+                top: BorderSide(color: Colors.grey[200]!),
+              ),
             ),
-          ),
-          child: NumberPagination(
-            onPageChanged: (int pageNumber) {
-              setState(() {
-                selectedPageNumber = pageNumber;
-                isLoadingInventory = true;
-              });
-              getInventoryTransfer(customerId);
-            },
-            visiblePagesCount: 3,
-            totalPages: paginationInfo?['total_page'] ?? 0,
-            currentPage: selectedPageNumber,
-            buttonRadius: 12,
-            selectedButtonColor: Colors.amber.shade400,
-            selectedNumberColor: Colors.black,
-            unSelectedButtonColor: Colors.grey[100]!,
-            unSelectedNumberColor: Colors.grey[700]!,
-            numberButtonSize: const Size(35, 35),
-            controlButtonSize: const Size(35, 35),
-            fontSize: 14,
-            sectionSpacing: 5,
-            navigationButtonSpacing: 0,
-            enableInteraction: inventoryList.length < 10 ? false : true,
-          ),
-        ),
+            child: NumberPagination(
+              onPageChanged: (int pageNumber) {
+                setState(() {
+                  selectedPageNumber = pageNumber;
+                  isLoadingInventory = true;
+                });
+                getInventoryTransfer(customerId);
+              },
+              visiblePagesCount: 3,
+              totalPages: totalPages,
+              currentPage: selectedPageNumber.clamp(1, totalPages),
+              buttonRadius: 12,
+              selectedButtonColor: Colors.amber.shade400,
+              selectedNumberColor: Colors.black,
+              unSelectedButtonColor: Colors.grey[100]!,
+              unSelectedNumberColor: Colors.grey[700]!,
+              numberButtonSize: const Size(35, 35),
+              controlButtonSize: const Size(35, 35),
+              fontSize: 14,
+              sectionSpacing: 5,
+              navigationButtonSpacing: 0,
+            ),
+          );
+        }),
       ],
     );
   }

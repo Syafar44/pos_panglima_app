@@ -13,6 +13,7 @@ import 'package:pos_panglima_app/utils/rupiah_formatter.dart';
 import 'package:pos_panglima_app/utils/snackbar_util.dart';
 import 'package:pos_panglima_app/views/widgets_tree.dart';
 import 'package:intl/date_symbol_data_local.dart';
+
 class StartShiftModal extends StatefulWidget {
   const StartShiftModal({super.key});
 
@@ -457,6 +458,7 @@ class _StartShiftModalState extends State<StartShiftModal> {
                     TextField(
                       keyboardType: TextInputType.number,
                       controller: controllerSalesStart,
+                      autofocus: false,
                       style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,

@@ -1,3 +1,0 @@
-dari project ini @pubspec.yaml  
-
-saya ingin menambahakn funsgi barcode scanner, untuk sambungan barcode nya menggunakan bluetooth, apakah perlu package tambahan pada project ini atau tidak, harapan saya api dari menu terutama list proeduknya mempunyai barcode yang bisa di scaan dan habis di sceen maka logikannya adalah mencari produk dengan barcode yang sesuai lalau langsung menambahkan produk tersebut ke keranjang, mulai sesi ini dengan menjawab pertanyaan saya tanpa merubah code apapun 
