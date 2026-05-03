@@ -422,22 +422,23 @@ class BluetoothPrinterService {
     bool? isConn = await bluetooth.isConnected;
 
     if (isConn != true) {
-      debugPrint("Printer belum terhubung! Menambahkan ke antrian cetak...");
-      _printQueue.add({
-        'documentNumber': documentNumber,
-        'usersName': usersName,
-        'listProduk': listProduk,
-        'totalQuantity': totalQuantity,
-        'isCash': isCash,
-        'method': method,
-        'totalPayment': totalPayment,
-        'subTotal': subTotal,
-        'payment': payment,
-        'paymentMethod': paymentMethod,
-        'isPayment': isPayment,
-      });
-      await _savePrintQueue();
-      _startQueueTimer();
+      debugPrint("Printer belum terhubung! Melewati cetak (antrian dinonaktifkan).");
+      // [QUEUE-DISABLED] Simpan ke antrian belum diaktifkan
+      // _printQueue.add({
+      //   'documentNumber': documentNumber,
+      //   'usersName': usersName,
+      //   'listProduk': listProduk,
+      //   'totalQuantity': totalQuantity,
+      //   'isCash': isCash,
+      //   'method': method,
+      //   'totalPayment': totalPayment,
+      //   'subTotal': subTotal,
+      //   'payment': payment,
+      //   'paymentMethod': paymentMethod,
+      //   'isPayment': isPayment,
+      // });
+      // await _savePrintQueue();
+      // _startQueueTimer();
       return;
     }
 
