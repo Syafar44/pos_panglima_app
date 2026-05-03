@@ -5,7 +5,9 @@ import 'package:number_pagination/number_pagination.dart';
 import 'package:pos_panglima_app/services/auth_service.dart';
 import 'package:pos_panglima_app/services/helper/dio_client.dart';
 import 'package:pos_panglima_app/services/order_service.dart';
+import 'package:pos_panglima_app/utils/app_colors.dart';
 import 'package:pos_panglima_app/utils/convert.dart';
+import 'package:pos_panglima_app/utils/crash_reporter.dart';
 import 'package:blue_thermal_printer/blue_thermal_printer.dart';
 import 'package:pos_panglima_app/services/bluetooth_printer_service.dart';
 import 'package:pos_panglima_app/utils/skeleton_loader.dart';
@@ -93,12 +95,14 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
         await _fetchOrderDetail(orderId!);
         setState(() => isFirstLoad = false);
       }
-    } catch (e) {
+    } catch (e, stack) {
+      CrashReporter.report(e, stack, reason: 'riwayat_penjualan_page._fetchOrders');
       if (!mounted) return;
       SnackbarUtil.show(
         context,
         title: "Gagal memuat riwayat penjualan",
-        message: "Terjadi kesalahan saat mengambil data riwayat penjualan. Mohon periksa koneksi atau coba kembali.",
+        message:
+            "Terjadi kesalahan saat mengambil data riwayat penjualan. Mohon periksa koneksi atau coba kembali.",
         status: SnackBarStatus.error,
       );
     }
@@ -109,19 +113,20 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
       setState(() => isLoadingOrdersDetail = true);
 
       final response = await orderService.getOrderDetail(id);
-      debugPrint(response.toString());
 
       setState(() {
         orderId = id;
         orderDetail = response.data['data'];
         isLoadingOrdersDetail = false;
       });
-    } catch (e) {
+    } catch (e, stack) {
+      CrashReporter.report(e, stack, reason: 'riwayat_penjualan_page._fetchOrderDetail');
       if (!mounted) return;
       SnackbarUtil.show(
         context,
         title: "Gagal memuat detail",
-        message: "Terjadi kesalahan saat mengambil detail. Mohon periksa koneksi atau coba kembali.",
+        message:
+            "Terjadi kesalahan saat mengambil detail. Mohon periksa koneksi atau coba kembali.",
         status: SnackBarStatus.error,
       );
     }
@@ -138,14 +143,16 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
         userId = data?['userid'];
         isLoadingUserId = false;
       });
-    } catch (e) {
+    } catch (e, stack) {
       isLoadingUserId = false;
       debugPrint("Gagal ambil user ID: $e");
+      CrashReporter.report(e, stack, reason: 'riwayat_penjualan_page._fetchProfile');
       if (!mounted) return;
       SnackbarUtil.show(
         context,
         title: "Gagal memuat data pengguna",
-        message: "Terjadi kesalahan saat mengambil data pengguna. Mohon periksa koneksi atau coba kembali.",
+        message:
+            "Terjadi kesalahan saat mengambil data pengguna. Mohon periksa koneksi atau coba kembali.",
         status: SnackBarStatus.error,
       );
     }
@@ -168,12 +175,14 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
         payment: orderDetail?['pay_amount'],
         isPayment: false,
       );
-    } catch (e) {
+    } catch (e, stack) {
+      CrashReporter.report(e, stack, reason: 'riwayat_penjualan_page.handlePrintStruk');
       if (!mounted) return;
       SnackbarUtil.show(
         context,
         title: "Gagal mencetak struk",
-        message: "Terjadi kesalahan saat mencetak struk. Pastikan printer terhubung dengan benar dan coba kembali.",
+        message:
+            "Terjadi kesalahan saat mencetak struk. Pastikan printer terhubung dengan benar dan coba kembali.",
         status: SnackBarStatus.error,
       );
     }
@@ -184,6 +193,7 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
     _bluetoothSubscription?.cancel();
     _debounce?.cancel();
     controllerSearch.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -194,7 +204,7 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
         Expanded(
           flex: 1,
           child: Container(
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               border: Border(right: BorderSide(color: Colors.black26)),
             ),
             child: Column(
@@ -212,15 +222,13 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
                   ),
                   child: Container(
                     decoration: BoxDecoration(
-                      color: Colors
-                          .grey[100], 
+                      color: Colors.grey[100],
                       borderRadius: BorderRadius.circular(12.0),
                       border: Border.all(color: Colors.grey[300]!),
                     ),
                     child: TextField(
                       controller: controllerSearch,
-                      autofocus:
-                          false,
+                      autofocus: false,
                       style: const TextStyle(fontSize: 14.0),
                       decoration: InputDecoration(
                         prefixIcon: const Icon(
@@ -298,18 +306,18 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
                                     duration: const Duration(milliseconds: 200),
                                     decoration: BoxDecoration(
                                       color: isActive
-                                          ? Colors.amber[50]
+                                          ? AppColors.accent.withValues(alpha: 0.1)
                                           : Colors.white,
                                       borderRadius: BorderRadius.circular(12),
                                       border: Border.all(
                                         color: isActive
-                                            ? Colors.orange
+                                            ? AppColors.primaryMedium
                                             : Colors.grey[200]!,
                                         width: isActive ? 2 : 1,
                                       ),
                                       boxShadow: [
                                         BoxShadow(
-                                          color: Colors.black.withOpacity(0.03),
+                                          color: Colors.black.withValues(alpha: 0.03),
                                           blurRadius: 10,
                                           offset: const Offset(0, 4),
                                         ),
@@ -331,7 +339,7 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
                                                   ),
                                                   decoration: BoxDecoration(
                                                     color: isActive
-                                                        ? Colors.amber
+                                                        ? AppColors.primary
                                                         : Colors.grey[100],
                                                     borderRadius:
                                                         BorderRadius.circular(
@@ -342,7 +350,7 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
                                                     Icons.receipt_long_outlined,
                                                     size: 20,
                                                     color: isActive
-                                                        ? Colors.black87
+                                                        ? Colors.white
                                                         : Colors.grey[600],
                                                   ),
                                                 ),
@@ -420,7 +428,7 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
                                               decoration: BoxDecoration(
                                                 color: _getMethodColor(
                                                   order['pos_order_method_id'],
-                                                ).withOpacity(0.1),
+                                                ).withValues(alpha: 0.1),
                                                 borderRadius:
                                                     BorderRadius.circular(20),
                                               ),
@@ -451,7 +459,7 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
                               right: 0,
                               child: IgnorePointer(
                                 child: AnimatedOpacity(
-                                  duration: Duration(milliseconds: 300),
+                                  duration: const Duration(milliseconds: 300),
                                   opacity: fadeOpacity,
                                   child: Container(
                                     height: 40,
@@ -461,7 +469,7 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
                                         end: Alignment.bottomCenter,
                                         colors: [
                                           // ignore: deprecated_member_use
-                                          Colors.black45.withOpacity(0),
+                                          Colors.black45.withValues(alpha: 0),
                                           Colors.black45,
                                         ],
                                       ),
@@ -499,8 +507,8 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
                     currentPage: selectedPageNumber,
                     // --- Custom Styling ---
                     buttonRadius: 12, // Membuat tombol sedikit lebih bulat
-                    selectedButtonColor: Colors.amber.shade400,
-                    selectedNumberColor: Colors.black,
+                    selectedButtonColor: AppColors.primary,
+                    selectedNumberColor: Colors.white,
                     unSelectedButtonColor: Colors.grey[100]!,
                     unSelectedNumberColor: Colors.grey[700]!,
                     numberButtonSize: const Size(35, 35),
@@ -561,9 +569,9 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
                                   ),
                                   foregroundColor: Colors.black87,
                                 ),
-                                child: Row(
+                                child: const Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
-                                  children: const [
+                                  children: [
                                     Icon(Icons.share_outlined, size: 20),
                                     SizedBox(width: 8),
                                     Text(
@@ -592,16 +600,16 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
                                   handlePrintStruk();
                                 },
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.amber,
-                                  foregroundColor: Colors.black87,
+                                  backgroundColor: AppColors.primary,
+                                  foregroundColor: Colors.white,
                                   elevation: 0,
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(12),
                                   ),
                                 ),
-                                child: Row(
+                                child: const Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
-                                  children: const [
+                                  children: [
                                     Icon(Icons.print_outlined, size: 20),
                                     SizedBox(width: 8),
                                     Text(
@@ -621,7 +629,7 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
                     Expanded(
                       child: SingleChildScrollView(
                         child: Container(
-                          padding: EdgeInsets.all(20.0),
+                          padding: const EdgeInsets.all(20.0),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             spacing: 10.0,
@@ -688,7 +696,7 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
                                   ],
                                 ),
                               ),
-                              Divider(),
+                              const Divider(),
 
                               Text(
                                 orderDetail?['pos_order_method_name'] ==
@@ -709,7 +717,7 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
                                   border: Border.all(color: Colors.grey[200]!),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Colors.black.withOpacity(0.03),
+                                      color: Colors.black.withValues(alpha: 0.03),
                                       blurRadius: 10,
                                       offset: const Offset(0, 4),
                                     ),
@@ -862,7 +870,7 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
                                 ],
                               ),
 
-                              Text(
+                              const Text(
                                 'Barang & Jasa',
                                 style: TextStyle(
                                   fontSize: 18.0,
@@ -1042,7 +1050,7 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
                                               const SizedBox(height: 8),
                                               Row(
                                                 children: [
-                                                  Icon(
+                                                  const Icon(
                                                     Icons.person_outline,
                                                     size: 12,
                                                     color: Colors.black,
@@ -1050,7 +1058,7 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
                                                   const SizedBox(width: 4),
                                                   Text(
                                                     'Admin: ${orderDetail?['users_name']}',
-                                                    style: TextStyle(
+                                                    style: const TextStyle(
                                                       fontSize: 11,
                                                       color: Colors.black,
                                                       fontWeight:
@@ -1214,8 +1222,7 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
                                           ),
                                           style: const TextStyle(
                                             fontSize: 24.0,
-                                            color: Colors
-                                                .orange, // Tetap gunakan orange sebagai aksen utama
+                                            color: AppColors.primary,
                                             fontWeight: FontWeight.bold,
                                           ),
                                         ),
@@ -1274,7 +1281,7 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.black.withOpacity(0.05)),
+              border: Border.all(color: Colors.black.withValues(alpha: 0.05)),
             ),
             child: Icon(icon, size: 22.0, color: Colors.blueGrey[700]),
           ),
@@ -1348,7 +1355,7 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
         _buildVerticalDivider(),
         _buildAmountColumn('Total Bayar', bayar, Colors.blue),
         _buildVerticalDivider(),
-        _buildAmountColumn('Kembali', kembali, Colors.orange[700]!),
+        _buildAmountColumn('Kembali', kembali, AppColors.primary),
       ],
     );
   }

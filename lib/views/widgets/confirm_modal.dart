@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:pos_panglima_app/utils/app_colors.dart';
 
 class ConfirmModal extends StatelessWidget {
   const ConfirmModal({
@@ -35,14 +36,14 @@ class ConfirmModal extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: isDanger ? Colors.red.shade50 : Colors.amber.shade50,
+                color: isDanger ? Colors.red.shade50 : AppColors.primaryLight,
                 shape: BoxShape.circle,
               ),
               child: Icon(
                 isDanger
                     ? Icons.warning_amber_rounded
                     : Icons.help_outline_rounded,
-                color: isDanger ? Colors.red : Colors.amber.shade900,
+                color: isDanger ? Colors.red : AppColors.primaryDarkest,
                 size: 40,
               ),
             ),
@@ -101,8 +102,10 @@ class ConfirmModal extends StatelessWidget {
                   child: ElevatedButton(
                     onPressed: () => Navigator.pop(context, true),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: isDanger ? Colors.red : Colors.amber,
-                      foregroundColor: isDanger ? Colors.white : Colors.black87,
+                      backgroundColor: isDanger
+                          ? Colors.red
+                          : AppColors.primary,
+                      foregroundColor: isDanger ? Colors.white : Colors.white,
                       elevation: 0,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:pos_panglima_app/utils/app_colors.dart';
 
 class ModalHandling extends StatelessWidget {
   const ModalHandling({
@@ -27,7 +28,7 @@ class ModalHandling extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.red.withOpacity(0.1),
+                  color: Colors.red.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(
@@ -40,12 +41,12 @@ class ModalHandling extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.orange.withOpacity(0.1),
+                  color: AppColors.primary.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(
                   Icons.warning_outlined,
-                  color: Colors.orangeAccent,
+                  color: AppColors.primary,
                   size: 50,
                 ),
               ),
@@ -84,7 +85,7 @@ class ModalHandling extends StatelessWidget {
                   backgroundColor: type == 'danger'
                       ? Colors.redAccent
                       : type == 'warning'
-                      ? Colors.amber
+                      ? AppColors.primary
                       : Colors.grey,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(

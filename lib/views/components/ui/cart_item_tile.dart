@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:pos_panglima_app/utils/app_colors.dart';
 import 'package:pos_panglima_app/utils/convert.dart';
 
 class CartItemTile extends StatelessWidget {
@@ -23,7 +24,7 @@ class CartItemTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: Colors.black.withValues(alpha: 0.1),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -58,7 +59,7 @@ class CartItemTile extends StatelessWidget {
                           Text(
                             convertIDR(item['total']),
                             style: const TextStyle(
-                              color: Colors.amber,
+                              color: AppColors.primary,
                               fontWeight: FontWeight.w800,
                               fontSize: 15,
                             ),
@@ -103,7 +104,7 @@ class CartItemTile extends StatelessWidget {
                                       horizontal: 8,
                                       vertical: 2,
                                     ),
-                                    margin: EdgeInsets.only(bottom: 4),
+                                    margin: const EdgeInsets.only(bottom: 4),
                                     decoration: BoxDecoration(
                                       color: Colors.grey[100],
                                       borderRadius: BorderRadius.circular(4),
@@ -198,7 +199,7 @@ class CartItemTile extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: isPrimary ? Colors.amber : Colors.transparent,
+          color: isPrimary ? AppColors.primary : Colors.transparent,
           borderRadius: BorderRadius.circular(20),
         ),
         child: Icon(

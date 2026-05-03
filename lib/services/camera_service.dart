@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:pos_panglima_app/utils/crash_reporter.dart';
 
 class CameraService {
   CameraController? _controller;
@@ -37,9 +38,9 @@ class CameraService {
 
       final XFile file = await _controller!.takePicture();
       return File(file.path);
-    } catch (e) {
-      
+    } catch (e, stack) {
       debugPrint("Camera capture error: $e");
+      CrashReporter.report(e, stack, reason: 'camera_service.capture');
       return null;
     }
   }

@@ -7,7 +7,7 @@ class OpenBillPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: EdgeInsets.all(20.0),
+      padding: const EdgeInsets.all(20.0),
       child: Expanded(
         child: SingleChildScrollView(
           child: Column(
@@ -17,13 +17,13 @@ class OpenBillPage extends StatelessWidget {
                 child: Column(
                   children: [
                     Container(
-                      padding: EdgeInsets.all(20.0),
-                      decoration: BoxDecoration(
+                      padding: const EdgeInsets.all(20.0),
+                      decoration: const BoxDecoration(
                         border: Border(
                           bottom: BorderSide(color: Colors.black26),
                         ),
                       ),
-                      child: Row(
+                      child: const Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Row(
@@ -66,7 +66,7 @@ class OpenBillPage extends StatelessWidget {
                         Expanded(
                           flex: 2,
                           child: Container(
-                            decoration: BoxDecoration(
+                            decoration: const BoxDecoration(
                               border: Border(
                                 right: BorderSide(color: Colors.black26),
                               ),
@@ -76,7 +76,7 @@ class OpenBillPage extends StatelessWidget {
                               spacing: 20.0,
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(
+                                const Text(
                                   'Takeaway (12)',
                                   style: TextStyle(fontSize: 16.0),
                                 ),
@@ -110,7 +110,7 @@ class OpenBillPage extends StatelessWidget {
                                                     BorderRadius.circular(10),
                                               ),
                                               alignment: Alignment.center,
-                                              child: Text(
+                                              child: const Text(
                                                 'GA',
                                                 style: TextStyle(
                                                   fontWeight: FontWeight.bold,
@@ -118,7 +118,7 @@ class OpenBillPage extends StatelessWidget {
                                                 ),
                                               ),
                                             ),
-                                            Column(
+                                            const Column(
                                               crossAxisAlignment:
                                                   CrossAxisAlignment.start,
                                               children: [
@@ -136,7 +136,7 @@ class OpenBillPage extends StatelessWidget {
                                         ),
                                         Text(
                                           convertIDR(30000),
-                                          style: TextStyle(
+                                          style: const TextStyle(
                                             fontSize: 16.0,
                                             fontWeight: FontWeight.bold,
                                           ),
@@ -170,7 +170,7 @@ class OpenBillPage extends StatelessWidget {
                                                     BorderRadius.circular(10),
                                               ),
                                               alignment: Alignment.center,
-                                              child: Text(
+                                              child: const Text(
                                                 'GA',
                                                 style: TextStyle(
                                                   fontWeight: FontWeight.bold,
@@ -178,7 +178,7 @@ class OpenBillPage extends StatelessWidget {
                                                 ),
                                               ),
                                             ),
-                                            Column(
+                                            const Column(
                                               crossAxisAlignment:
                                                   CrossAxisAlignment.start,
                                               children: [
@@ -196,7 +196,7 @@ class OpenBillPage extends StatelessWidget {
                                         ),
                                         Text(
                                           convertIDR(30000),
-                                          style: TextStyle(
+                                          style: const TextStyle(
                                             fontSize: 16.0,
                                             fontWeight: FontWeight.bold,
                                           ),
@@ -209,7 +209,7 @@ class OpenBillPage extends StatelessWidget {
                                   mainAxisAlignment:
                                       MainAxisAlignment.spaceBetween,
                                   children: [
-                                    Text(
+                                    const Text(
                                       'Subtotal',
                                       style: TextStyle(
                                         fontSize: 18.0,
@@ -218,7 +218,7 @@ class OpenBillPage extends StatelessWidget {
                                     ),
                                     Text(
                                       convertIDR(999912),
-                                      style: TextStyle(
+                                      style: const TextStyle(
                                         fontSize: 18.0,
                                         fontWeight: FontWeight.bold,
                                       ),
@@ -242,7 +242,7 @@ class OpenBillPage extends StatelessWidget {
                                   mainAxisAlignment:
                                       MainAxisAlignment.spaceBetween,
                                   children: [
-                                    Text(
+                                    const Text(
                                       'Subtotal',
                                       style: TextStyle(
                                         fontSize: 16.0,
@@ -251,7 +251,7 @@ class OpenBillPage extends StatelessWidget {
                                     ),
                                     Text(
                                       convertIDR(20017),
-                                      style: TextStyle(
+                                      style: const TextStyle(
                                         fontSize: 16.0,
                                         fontWeight: FontWeight.bold,
                                       ),
@@ -259,7 +259,7 @@ class OpenBillPage extends StatelessWidget {
                                   ],
                                 ),
                               ),
-                              Divider(),
+                              const Divider(),
                               Padding(
                                 padding: const EdgeInsets.all(20.0),
                                 child: Row(
@@ -270,7 +270,7 @@ class OpenBillPage extends StatelessWidget {
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
                                       children: [
-                                        Text(
+                                        const Text(
                                           'Total Tagihan',
                                           style: TextStyle(
                                             fontWeight: FontWeight.bold,
@@ -278,7 +278,7 @@ class OpenBillPage extends StatelessWidget {
                                         ),
                                         Text(
                                           convertIDR(60000),
-                                          style: TextStyle(
+                                          style: const TextStyle(
                                             fontSize: 16.0,
                                             fontWeight: FontWeight.bold,
                                           ),
@@ -295,7 +295,7 @@ class OpenBillPage extends StatelessWidget {
                                           ),
                                         ),
                                       ),
-                                      child: Text(
+                                      child: const Text(
                                         'Bayar',
                                         style: TextStyle(
                                           color: Colors.black,

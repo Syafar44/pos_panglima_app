@@ -5,6 +5,7 @@ import 'package:blue_thermal_printer/blue_thermal_printer.dart';
 import 'package:pos_panglima_app/services/bluetooth_printer_service.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:pos_panglima_app/utils/app_colors.dart';
 import 'package:mime/mime.dart';
 import 'package:pos_panglima_app/data/notifiers.dart';
 import 'package:pos_panglima_app/services/auth_service.dart';
@@ -13,6 +14,7 @@ import 'package:pos_panglima_app/services/cart_service.dart';
 import 'package:pos_panglima_app/services/helper/dio_client.dart';
 import 'package:pos_panglima_app/services/method_service.dart';
 import 'package:pos_panglima_app/services/network_service.dart';
+import 'package:pos_panglima_app/utils/crash_reporter.dart';
 import 'package:pos_panglima_app/services/order_service.dart';
 import 'package:pos_panglima_app/services/storage/shift_storage_service.dart';
 import 'package:pos_panglima_app/utils/convert.dart';
@@ -160,8 +162,25 @@ class _PaymentPageState extends State<PaymentPage> {
         isLoadingCart = false;
         totalQuantity = newTotalQuantity;
       });
-    } on DioException catch (e) {
+    } on DioException catch (e, stack) {
+      CrashReporter.report(
+        e,
+        stack,
+        reason: 'payment_page.loadCart',
+        context: {
+          'endpoint': e.requestOptions.path,
+          'statusCode': e.response?.statusCode,
+          'responseData': e.response?.data?.toString(),
+        },
+      );
       debugPrint('loadCart error: ${e.response?.data}');
+      if (!mounted) return;
+      SnackbarUtil.show(
+        context,
+        title: "Gagal memuat keranjang",
+        message: "Terjadi kesalahan saat mengambil data keranjang.",
+        status: SnackBarStatus.error,
+      );
     }
   }
 
@@ -171,6 +190,7 @@ class _PaymentPageState extends State<PaymentPage> {
 
     if (!online) {
       setState(() => isLoading = false);
+      if (!mounted) return;
       SnackbarUtil.show(
         context,
         title: "Tidak Ada Koneksi",
@@ -357,11 +377,21 @@ class _PaymentPageState extends State<PaymentPage> {
         if (!mounted) return;
         Navigator.pushAndRemoveUntil(
           context,
-          MaterialPageRoute(builder: (_) => WidgetTree()),
+          MaterialPageRoute(builder: (_) => const WidgetTree()),
           (route) => false,
         );
       }
-    } on DioException catch (e) {
+    } on DioException catch (e, stack) {
+      CrashReporter.report(
+        e,
+        stack,
+        reason: 'payment_page.handlePayment',
+        context: {
+          'endpoint': e.requestOptions.path,
+          'statusCode': e.response?.statusCode,
+          'responseData': e.response?.data?.toString(),
+        },
+      );
       if (!mounted) return;
       final String message =
           e.response?.data?['message'] ?? 'Terjadi kesalahan';
@@ -389,10 +419,17 @@ class _PaymentPageState extends State<PaymentPage> {
             : null;
         isLoadingUserId = false;
       });
-    } catch (e) {
+    } catch (e, stack) {
+      CrashReporter.report(e, stack, reason: 'payment_page.getProfile');
       if (!mounted) return;
       isLoadingUserId = false;
       debugPrint("Gagal ambil user ID: $e");
+      SnackbarUtil.show(
+        context,
+        title: "Gagal memuat data pengguna",
+        message: "Terjadi kendala saat mengambil data pengguna.",
+        status: SnackBarStatus.error,
+      );
     }
   }
 
@@ -406,9 +443,16 @@ class _PaymentPageState extends State<PaymentPage> {
         orderResponse.data['data'],
       );
       setState(() => isLoadingMethod = false);
-    } catch (e) {
+    } catch (e, stack) {
+      CrashReporter.report(e, stack, reason: 'payment_page._methods');
       if (!mounted) return;
       debugPrint("Error fetching methods: $e");
+      SnackbarUtil.show(
+        context,
+        title: "Gagal memuat metode",
+        message: "Terjadi kendala saat mengambil metode pembayaran.",
+        status: SnackBarStatus.error,
+      );
     }
   }
 
@@ -432,11 +476,11 @@ class _PaymentPageState extends State<PaymentPage> {
               ),
               titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
               contentPadding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
-              title: Row(
+              title: const Row(
                 children: [
-                  Icon(Icons.note_add_rounded, color: Colors.amber.shade900),
-                  const SizedBox(width: 12),
-                  const Text(
+                  Icon(Icons.note_add_rounded, color: AppColors.primaryDarkest),
+                  SizedBox(width: 12),
+                  Text(
                     "Keterangan Compliment",
                     style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
                   ),
@@ -468,7 +512,7 @@ class _PaymentPageState extends State<PaymentPage> {
                         ),
                         labelText: "Detail Keterangan *",
                         labelStyle: const TextStyle(
-                          color: Colors.amber,
+                          color: AppColors.primary,
                           fontWeight: FontWeight.bold,
                         ),
                         alignLabelWithHint: true,
@@ -485,7 +529,7 @@ class _PaymentPageState extends State<PaymentPage> {
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                           borderSide: const BorderSide(
-                            color: Colors.amber,
+                            color: AppColors.primary,
                             width: 2,
                           ),
                         ),
@@ -508,7 +552,7 @@ class _PaymentPageState extends State<PaymentPage> {
                 ),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.amber,
+                    backgroundColor: AppColors.primary,
                     foregroundColor: Colors.black87,
                     elevation: 0,
                     padding: const EdgeInsets.symmetric(
@@ -562,7 +606,7 @@ class _PaymentPageState extends State<PaymentPage> {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.red.withOpacity(0.1),
+                  color: Colors.red.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(
@@ -639,7 +683,7 @@ class _PaymentPageState extends State<PaymentPage> {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.green.withOpacity(0.1),
+                  color: Colors.green.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(
@@ -707,7 +751,7 @@ class _PaymentPageState extends State<PaymentPage> {
                 ),
               ],
 
-              SizedBox(height: 24),
+              const SizedBox(height: 24),
 
               // 4. Tombol Aksi
               SizedBox(
@@ -725,7 +769,7 @@ class _PaymentPageState extends State<PaymentPage> {
                   onPressed: () {
                     Navigator.pushAndRemoveUntil(
                       context,
-                      MaterialPageRoute(builder: (_) => WidgetTree()),
+                      MaterialPageRoute(builder: (_) => const WidgetTree()),
                       (route) => false,
                     );
                   },
@@ -759,7 +803,7 @@ class _PaymentPageState extends State<PaymentPage> {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.green.withOpacity(0.1),
+                  color: Colors.green.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(
@@ -838,7 +882,7 @@ class _PaymentPageState extends State<PaymentPage> {
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: Colors.red.withOpacity(0.1),
+                    color: Colors.red.withValues(alpha: 0.1),
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(
@@ -915,9 +959,25 @@ class _PaymentPageState extends State<PaymentPage> {
 
       await saveVoucherToLocal(newBarcode, nominal);
       await getVoucherData();
-      debugPrint('postLampiran response: $response');
-    } on DioException catch (e) {
+    } on DioException catch (e, stack) {
+      CrashReporter.report(
+        e,
+        stack,
+        reason: 'payment_page.checkVoucher',
+        context: {
+          'endpoint': e.requestOptions.path,
+          'statusCode': e.response?.statusCode,
+          'responseData': e.response?.data?.toString(),
+        },
+      );
       debugPrint('postLampiran DioException: ${e.response}');
+      if (!mounted) return;
+      SnackbarUtil.show(
+        context,
+        title: "Voucher Gagal",
+        message: "Terjadi kesalahan saat mengecek voucher.",
+        status: SnackBarStatus.error,
+      );
     }
   }
 
@@ -955,9 +1015,6 @@ class _PaymentPageState extends State<PaymentPage> {
         ? List<String>.from(jsonDecode(storedBarcodes))
         : [];
     final int totalNominal = prefs.getInt('voucher_nominal') ?? 0;
-
-    debugPrint('Barcodes: $barcodeList');
-    debugPrint('Total Nominal: $totalNominal');
     setState(() {
       barcodeList = newBarcodeList;
       nominalVoucher = totalNominal;
@@ -978,6 +1035,8 @@ class _PaymentPageState extends State<PaymentPage> {
   void dispose() {
     _bluetoothSubscription?.cancel();
     _customAmountController.dispose();
+    _voucherController.dispose();
+    _keteranganCompliment.dispose();
     _scrollController.dispose();
     super.dispose();
   }
@@ -990,7 +1049,7 @@ class _PaymentPageState extends State<PaymentPage> {
         foregroundColor: Colors.black,
         surfaceTintColor: Colors.transparent,
         bottom: PreferredSize(
-          preferredSize: Size.fromHeight(1),
+          preferredSize: const Size.fromHeight(1),
           child: Container(
             color: Colors.grey[300],
             height: 1, // tebal garis
@@ -1019,7 +1078,7 @@ class _PaymentPageState extends State<PaymentPage> {
                   flex: 1,
                   child: Container(
                     height: double.infinity,
-                    decoration: BoxDecoration(
+                    decoration: const BoxDecoration(
                       border: Border(right: BorderSide(color: Colors.black26)),
                     ),
                     child: Column(
@@ -1041,7 +1100,7 @@ class _PaymentPageState extends State<PaymentPage> {
                                 .grey[50], // Abu-abu sangat muda agar tidak "mati"
                             border: Border(
                               bottom: BorderSide(
-                                color: Colors.grey.withOpacity(0.2),
+                                color: Colors.grey.withValues(alpha: 0.2),
                               ),
                             ),
                           ),
@@ -1083,7 +1142,7 @@ class _PaymentPageState extends State<PaymentPage> {
                                       color: Colors.white,
                                       borderRadius: BorderRadius.circular(12),
                                       border: Border.all(
-                                        color: Colors.grey.withOpacity(0.3),
+                                        color: Colors.grey.withValues(alpha: 0.3),
                                       ),
                                     ),
                                     child: Row(
@@ -1174,7 +1233,7 @@ class _PaymentPageState extends State<PaymentPage> {
                                             vertical: 6,
                                           ),
                                           decoration: BoxDecoration(
-                                            color: Colors.amber[50],
+                                            color: AppColors.primaryLight,
                                             borderRadius: BorderRadius.circular(
                                               8,
                                             ),
@@ -1182,7 +1241,7 @@ class _PaymentPageState extends State<PaymentPage> {
                                           child: Text(
                                             '${e['quantity']} PCS',
                                             style: const TextStyle(
-                                              color: Colors.orange,
+                                              color: AppColors.primary,
                                               fontWeight: FontWeight.bold,
                                               fontSize: 12,
                                             ),
@@ -1210,8 +1269,8 @@ class _PaymentPageState extends State<PaymentPage> {
                                           begin: Alignment.topCenter,
                                           end: Alignment.bottomCenter,
                                           colors: [
-                                            Colors.black.withOpacity(0),
-                                            Colors.black.withOpacity(0.1),
+                                            Colors.black.withValues(alpha: 0),
+                                            Colors.black.withValues(alpha: 0.1),
                                             Colors.black12,
                                           ],
                                         ),
@@ -1239,7 +1298,7 @@ class _PaymentPageState extends State<PaymentPage> {
                             //     color: Colors.white,
                             //     border: Border(
                             //       top: BorderSide(
-                            //         color: Colors.grey.withOpacity(0.1),
+                            //         color: Colors.grey.withValues(alpha: 0.1),
                             //       ),
                             //     ),
                             //   ),
@@ -1273,7 +1332,7 @@ class _PaymentPageState extends State<PaymentPage> {
                             //                   10,
                             //                 ),
                             //                 borderSide: BorderSide(
-                            //                   color: Colors.grey.withOpacity(
+                            //                   color: Colors.grey.withValues(alpha: 
                             //                     0.2,
                             //                   ),
                             //                 ),
@@ -1335,7 +1394,7 @@ class _PaymentPageState extends State<PaymentPage> {
                                   ),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Colors.black.withOpacity(0.05),
+                                      color: Colors.black.withValues(alpha: 0.05),
                                       blurRadius: 10,
                                       offset: const Offset(0, -5),
                                     ),
@@ -1397,8 +1456,8 @@ class _PaymentPageState extends State<PaymentPage> {
                                             fontSize:
                                                 22, // Menonjolkan angka utama
                                             fontWeight: FontWeight.w900,
-                                            color: Colors
-                                                .amber, // Menggunakan warna tema brand
+                                            color: AppColors
+                                                .primary, // Menggunakan warna tema brand
                                           ),
                                         ),
                                       ],
@@ -1419,14 +1478,19 @@ class _PaymentPageState extends State<PaymentPage> {
                       Container(
                         width: double.infinity,
                         decoration: BoxDecoration(
-                          border: Border(
+                          gradient: LinearGradient(
+                            colors: [AppColors.accent, AppColors.accentDark],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          border: const Border(
                             bottom: BorderSide(color: Colors.black26),
                           ),
                         ),
-                        padding: EdgeInsets.all(14.0),
+                        padding: const EdgeInsets.all(14.0),
                         child: Column(
                           children: [
-                            Text(
+                            const Text(
                               'Total Penerimaan',
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
@@ -1436,7 +1500,7 @@ class _PaymentPageState extends State<PaymentPage> {
                             ),
                             Text(
                               convertIDR(totalPayment - nominalVoucher),
-                              style: TextStyle(
+                              style: const TextStyle(
                                 fontWeight: FontWeight.w900,
                                 color: Colors.black,
                                 fontSize: 30.0,
@@ -1454,7 +1518,7 @@ class _PaymentPageState extends State<PaymentPage> {
                       Expanded(
                         child: SingleChildScrollView(
                           child: Container(
-                            padding: EdgeInsets.all(20.0),
+                            padding: const EdgeInsets.all(20.0),
                             child: selectedTab == 0
                                 ? tunaiSection()
                                 : nonTunaiSection(),
@@ -1469,7 +1533,7 @@ class _PaymentPageState extends State<PaymentPage> {
                             color: Colors.white,
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.03),
+                                color: Colors.black.withValues(alpha: 0.03),
                                 blurRadius: 10,
                                 offset: const Offset(0, -5),
                               ),
@@ -1481,7 +1545,7 @@ class _PaymentPageState extends State<PaymentPage> {
                             child: ElevatedButton(
                               onPressed: isLoading ? null : handlePayment,
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.amber.shade500,
+                                backgroundColor: AppColors.primarySelected,
                                 disabledBackgroundColor: Colors
                                     .grey
                                     .shade300, // Warna saat loading/disable
@@ -1494,14 +1558,14 @@ class _PaymentPageState extends State<PaymentPage> {
                                 ),
                               ),
                               child: isLoading
-                                  ? SizedBox(
+                                  ? const SizedBox(
                                       width: 20,
                                       height: 20,
                                       child: CircularProgressIndicator(
                                         strokeWidth: 3,
                                         valueColor:
                                             AlwaysStoppedAnimation<Color>(
-                                              Colors.amber,
+                                              AppColors.primary,
                                             ),
                                       ),
                                     )
@@ -1509,7 +1573,7 @@ class _PaymentPageState extends State<PaymentPage> {
                                       'Selesaikan Pembayaran',
                                       style: TextStyle(
                                         fontSize: 16.0,
-                                        color: Colors.black87,
+                                        color: AppColors.white,
                                         fontWeight: FontWeight.bold,
                                         letterSpacing: 0.5,
                                       ),
@@ -1534,7 +1598,7 @@ class _PaymentPageState extends State<PaymentPage> {
           "Metode Penerimaan",
           style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
         ),
-        SizedBox(height: 10.0),
+        const SizedBox(height: 10.0),
         Row(
           children: [
             CustomChipCheckbox(
@@ -1542,13 +1606,13 @@ class _PaymentPageState extends State<PaymentPage> {
               isSelected: selectedPayment == "exact",
               onSelect: () => setState(() => selectedPayment = "exact"),
             ),
-            SizedBox(width: 12),
+            const SizedBox(width: 12),
             CustomChipCheckbox(
               label: convertIDR(roundedAmount),
               isSelected: selectedPayment == "rounded",
               onSelect: () => setState(() => selectedPayment = "rounded"),
             ),
-            SizedBox(width: 12),
+            const SizedBox(width: 12),
             CustomChipCheckbox(
               label: "Custom",
               isSelected: selectedPayment == "custom",
@@ -1565,7 +1629,7 @@ class _PaymentPageState extends State<PaymentPage> {
               errorText: isValidCustom
                   ? null
                   : "Nominal harus lebih besar dari total penerimaan",
-              border: OutlineInputBorder(),
+              border: const OutlineInputBorder(),
             ),
             keyboardType: TextInputType.number,
             onChanged: (val) {
@@ -1577,11 +1641,11 @@ class _PaymentPageState extends State<PaymentPage> {
           ),
         ],
         const SizedBox(height: 20),
-        Text(
+        const Text(
           "Metode",
           style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
         ),
-        SizedBox(height: 10.0),
+        const SizedBox(height: 10.0),
         methodPaymnet(),
       ],
     );
@@ -1595,7 +1659,7 @@ class _PaymentPageState extends State<PaymentPage> {
           "Metode Penerimaan",
           style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
         ),
-        SizedBox(height: 10.0),
+        const SizedBox(height: 10.0),
         Wrap(
           spacing: 10,
           runSpacing: 10,
@@ -1631,7 +1695,7 @@ class _PaymentPageState extends State<PaymentPage> {
         String name = method['name'] ?? '';
         int id = method['id'] ?? 0;
         if (selectedTab == 1 && id == 4) {
-          return SizedBox.shrink();
+          return const SizedBox.shrink();
         }
         return CustomChipCheckbox(
           label: name,
@@ -1682,16 +1746,16 @@ class _PaymentPageState extends State<PaymentPage> {
     return Expanded(
       child: GestureDetector(
         onTap: () => setState(() => selectedTab = index),
-        behavior: HitTestBehavior.opaque, // Memastikan area klik luas
+        behavior: HitTestBehavior.opaque,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 250), // Animasi transisi warna
+          duration: const Duration(milliseconds: 250),
           padding: const EdgeInsets.symmetric(vertical: 14),
           decoration: BoxDecoration(
             border: Border(
               bottom: BorderSide(
                 color: isSelected
-                    ? Colors.orange
-                    : Colors.grey.withOpacity(0.1),
+                    ? AppColors.danger
+                    : Colors.grey.withValues(alpha: 0.1),
                 width: 3,
               ),
             ),
@@ -1702,7 +1766,7 @@ class _PaymentPageState extends State<PaymentPage> {
             style: TextStyle(
               fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
               fontSize: 16,
-              color: isSelected ? Colors.orange : Colors.grey[500],
+              color: isSelected ? AppColors.danger : Colors.grey[500],
             ),
           ),
         ),

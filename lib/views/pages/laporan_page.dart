@@ -1,11 +1,12 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:pos_panglima_app/utils/app_colors.dart';
 import 'package:pos_panglima_app/services/auth_service.dart';
 import 'package:pos_panglima_app/services/helper/dio_client.dart';
+import 'package:pos_panglima_app/utils/crash_reporter.dart';
 import 'package:pos_panglima_app/services/report_service.dart';
 import 'package:pos_panglima_app/services/storage/shift_storage_service.dart';
 import 'package:pos_panglima_app/utils/convert.dart';
-import 'package:pos_panglima_app/utils/modal_handling.dart';
 import 'package:pos_panglima_app/utils/skeleton_loader.dart';
 import 'package:pos_panglima_app/utils/snackbar_util.dart';
 
@@ -76,7 +77,8 @@ class _LaporanPageState extends State<LaporanPage> {
       setState(() {
         shiftId = result;
       });
-    } catch (e) {
+    } catch (e, stack) {
+      CrashReporter.report(e, stack, reason: 'laporan_page.getShiftId');
       if (!mounted) return;
       SnackbarUtil.show(
         context,
@@ -109,13 +111,20 @@ class _LaporanPageState extends State<LaporanPage> {
         reportData = response.data['data'] ?? {};
         isLoadingData = false;
       });
-    } catch (e) {
+    } catch (e, stack) {
+      CrashReporter.report(e, stack, reason: 'laporan_page.getData');
       if (!mounted) return;
       setState(() {
         inventoryIsEmpty = true;
         isLoadingData = false;
       });
       debugPrint("Gagal ambil data laporan: $e");
+      SnackbarUtil.show(
+        context,
+        title: "Gagal memuat laporan",
+        message: "Terjadi kendala saat mengambil data laporan.",
+        status: SnackBarStatus.error,
+      );
     }
   }
 
@@ -203,7 +212,7 @@ class _LaporanPageState extends State<LaporanPage> {
                 title: 'Total Penerimaan',
                 value: convertIDR(totalPenerimaan),
                 icon: Icons.account_balance_wallet_rounded,
-                color: Colors.amber[700]!,
+                color: AppColors.primaryDark,
               ),
               const SizedBox(width: 16),
               _buildSummaryCard(
@@ -270,7 +279,7 @@ class _LaporanPageState extends State<LaporanPage> {
                 title: 'Total Penjualan',
                 value: convertIDR(totalPenjualan),
                 icon: Icons.point_of_sale_rounded,
-                color: Colors.amber[700]!,
+                color: AppColors.primaryDark,
               ),
               const SizedBox(width: 16),
               _buildSummaryCard(
@@ -334,7 +343,7 @@ class _LaporanPageState extends State<LaporanPage> {
                 title: 'Total Penjualan',
                 value: convertIDR(totalPenjualan),
                 icon: Icons.point_of_sale_rounded,
-                color: Colors.amber[700]!,
+                color: AppColors.primaryDark,
               ),
               const SizedBox(width: 16),
               _buildSummaryCard(
@@ -397,7 +406,7 @@ class _LaporanPageState extends State<LaporanPage> {
                 title: 'Total Penjualan',
                 value: convertIDR(totalPenjualan),
                 icon: Icons.point_of_sale_rounded,
-                color: Colors.amber[700]!,
+                color: AppColors.primaryDark,
               ),
               const SizedBox(width: 16),
               _buildSummaryCard(
@@ -553,8 +562,6 @@ class _LaporanPageState extends State<LaporanPage> {
           }
         }
 
-        debugPrint('reportData: $reportData');
-
         return Dialog(
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
@@ -574,7 +581,7 @@ class _LaporanPageState extends State<LaporanPage> {
                       if (snapshot.connectionState == ConnectionState.waiting) {
                         return const Center(
                           child: CircularProgressIndicator(
-                            color: Colors.orange,
+                            color: AppColors.primary,
                           ),
                         );
                       }
@@ -595,11 +602,13 @@ class _LaporanPageState extends State<LaporanPage> {
                         itemBuilder: (context, index) {
                           final item = transactions[index];
                           String subtitleInfo = item['users_name'] ?? '-';
-                          if (item['quantity'] != null)
+                          if (item['quantity'] != null) {
                             subtitleInfo += " • ${item['quantity']} Qty";
-                          if (item['jumlah_produk'] != null)
+                          }
+                          if (item['jumlah_produk'] != null) {
                             subtitleInfo +=
                                 " • ${item['jumlah_produk']} Produk";
+                          }
                           return InkWell(
                             onTap: () {},
                             child: Padding(
@@ -649,7 +658,7 @@ class _LaporanPageState extends State<LaporanPage> {
                                               .toDouble(),
                                         ),
                                         style: const TextStyle(
-                                          color: Colors.orange,
+                                          color: AppColors.primary,
                                           fontWeight: FontWeight.bold,
                                           fontSize: 16.0,
                                         ),
@@ -728,7 +737,7 @@ class _LaporanPageState extends State<LaporanPage> {
           border: Border.all(color: Colors.grey[300]!),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.03),
+              color: Colors.black.withValues(alpha: 0.03),
               blurRadius: 10,
               offset: const Offset(0, 4),
             ),
@@ -777,10 +786,10 @@ class _LaporanPageState extends State<LaporanPage> {
         leading: Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: Colors.amber[50],
+            color: AppColors.primaryLight,
             borderRadius: BorderRadius.circular(8),
           ),
-          child: Icon(icon, size: 18, color: Colors.amber[900]),
+          child: Icon(icon, size: 18, color: AppColors.primary),
         ),
         title: Text(
           title,
@@ -801,10 +810,10 @@ class _LaporanPageState extends State<LaporanPage> {
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
               decoration: BoxDecoration(
-                color: isActive ? Colors.amber[50] : Colors.white,
+                color: isActive ? AppColors.primary : Colors.white,
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(
-                  color: isActive ? Colors.orange : Colors.transparent,
+                  color: isActive ? AppColors.primaryDark : Colors.transparent,
                   width: isActive ? 2 : 1,
                 ),
               ),
@@ -826,7 +835,7 @@ class _LaporanPageState extends State<LaporanPage> {
                           style: TextStyle(
                             fontSize: isActive ? 15 : 13,
                             color: isActive
-                                ? Colors.amber[800]
+                                ? AppColors.white
                                 : Colors.grey[600],
                             fontWeight: isActive
                                 ? FontWeight.bold
@@ -839,7 +848,7 @@ class _LaporanPageState extends State<LaporanPage> {
                             width: 4,
                             height: 20,
                             decoration: BoxDecoration(
-                              color: Colors.amber[800],
+                              color: AppColors.primaryDarker,
                               borderRadius: BorderRadius.circular(2),
                             ),
                           ),

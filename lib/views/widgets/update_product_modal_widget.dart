@@ -1,10 +1,14 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:pos_panglima_app/services/cart_service.dart';
 import 'package:pos_panglima_app/services/helper/dio_client.dart';
 import 'dart:async';
 import 'package:pos_panglima_app/services/storage/shift_storage_service.dart';
+import 'package:pos_panglima_app/utils/app_colors.dart';
 import 'package:pos_panglima_app/utils/convert.dart';
-import 'package:pos_panglima_app/utils/modal_handling.dart';
+import 'package:pos_panglima_app/utils/crash_reporter.dart';
+import 'package:pos_panglima_app/utils/snackbar_util.dart';
+import 'package:pos_panglima_app/views/components/ui/step_button.dart';
 
 class UpdateProductModalWidget extends StatefulWidget {
   const UpdateProductModalWidget({
@@ -20,7 +24,7 @@ class UpdateProductModalWidget extends StatefulWidget {
     required this.discount,
     required this.discountVal,
     required this.total,
-    this.pos_cart_props,
+    this.posCartProps,
     this.maxQty,
     required this.collection,
     required this.onSaved,
@@ -39,7 +43,7 @@ class UpdateProductModalWidget extends StatefulWidget {
   final int discountVal;
   final int total;
   final bool collection;
-  final List? pos_cart_props;
+  final List? posCartProps;
   final int? maxQty;
   final dynamic onSaved;
   final String? imageUrl;
@@ -59,7 +63,7 @@ class _UpdateProductModalWidgetState extends State<UpdateProductModalWidget> {
   bool? hasShift;
 
   Timer? _timer;
-  final Duration _interval = Duration(milliseconds: 100);
+  final Duration _interval = const Duration(milliseconds: 100);
 
   void _decreaseQuantity() {
     if (quantity > 1) {
@@ -104,7 +108,7 @@ class _UpdateProductModalWidgetState extends State<UpdateProductModalWidget> {
 
     setState(() {
       selectedProps[code] = (selectedProps[code] ?? 0) + 1;
-      mergedProps = widget.pos_cart_props!.map((e) {
+      mergedProps = widget.posCartProps!.map((e) {
         final c = e['pos_menus_id']; // ← fix
         return {"pos_menus_id": c, "quantity": selectedProps[c] ?? 0};
       }).toList();
@@ -114,7 +118,7 @@ class _UpdateProductModalWidgetState extends State<UpdateProductModalWidget> {
   void resetVariants() {
     setState(() {
       selectedProps.clear();
-      mergedProps = widget.pos_cart_props!.map((e) {
+      mergedProps = widget.posCartProps!.map((e) {
         return {"pos_menus_id": e["pos_menus_id"], "quantity": 0}; // ← fix
       }).toList();
     });
@@ -140,13 +144,13 @@ class _UpdateProductModalWidgetState extends State<UpdateProductModalWidget> {
     // Prefill props
     selectedProps = {};
 
-    if (widget.pos_cart_props != null) {
-      for (var item in widget.pos_cart_props!) {
+    if (widget.posCartProps != null) {
+      for (var item in widget.posCartProps!) {
         selectedProps[item["pos_menus_id"]] = item["quantity"];
       }
     }
 
-    mergedProps = (widget.pos_cart_props ?? []).map((item) {
+    mergedProps = (widget.posCartProps ?? []).map((item) {
       final id = item['pos_menus_id'];
       final qty = selectedProps[id] ?? 0;
       return {"pos_menus_id": id, "quantity": qty};
@@ -189,26 +193,26 @@ class _UpdateProductModalWidgetState extends State<UpdateProductModalWidget> {
     };
 
     try {
-      final response = await cartService.updateCart(id, payload);
-      debugPrint('updateCart response: $response');
-    } catch (e) {
-      if (!mounted) return;
-      showDialog(
-        context: context,
-        builder: (context) {
-          return ModalHandling(
-            type: 'danger',
-            title: 'Update gagal',
-            description:
-                'Terjadi kesalahan saat memperbarui data. Mohon periksa koneksi atau coba kembali.',
-          );
-        },
+      await cartService.updateCart(id, payload);
+    } catch (e, stack) {
+      CrashReporter.report(
+        e,
+        stack,
+        reason: 'update_product_modal_widget.updateCart',
       );
-    } finally {
       if (!mounted) return;
-      widget.onSaved();
-      Navigator.of(context).pop();
+      SnackbarUtil.show(
+        context,
+        title: 'Update gagal',
+        message:
+            'Terjadi kesalahan saat memperbarui data. Mohon periksa koneksi atau coba kembali.',
+        status: SnackBarStatus.error,
+      );
     }
+
+    if (!mounted) return;
+    widget.onSaved();
+    Navigator.of(context).pop();
   }
 
   Future<void> _loadShiftStatus() async {
@@ -220,20 +224,20 @@ class _UpdateProductModalWidgetState extends State<UpdateProductModalWidget> {
   }
 
   void _showWarningShift() {
-    showDialog(
-      context: context,
-      builder: (context) => ModalHandling(
-        type: 'warning',
-        title: 'Perhatian',
-        description:
-            'Shift belum dimulai. Mulai shift terlebih dahulu untuk melakukan transaksi.',
-      ),
+    SnackbarUtil.show(
+      context,
+      title: "Mulai Shift terlebih dahulu",
+      message:
+          "Shift belum dimulai. Mulai shift terlebih dahulu untuk melakukan transaksi.",
+      status: SnackBarStatus.warning,
     );
   }
 
   @override
   void dispose() {
     _timer?.cancel();
+    diskonController.dispose();
+    catatanController.dispose();
     super.dispose();
   }
 
@@ -241,10 +245,10 @@ class _UpdateProductModalWidgetState extends State<UpdateProductModalWidget> {
   Widget build(BuildContext context) {
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      insetPadding: EdgeInsets.all(16),
+      insetPadding: const EdgeInsets.all(16),
       child: SingleChildScrollView(
         child: Container(
-          decoration: BoxDecoration(
+          decoration: const BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.all(Radius.circular(20.0)),
           ),
@@ -262,13 +266,13 @@ class _UpdateProductModalWidgetState extends State<UpdateProductModalWidget> {
                   border: Border(
                     top: BorderSide(color: Colors.grey.shade200, width: 1.5),
                   ),
-                  borderRadius: BorderRadius.only(
+                  borderRadius: const BorderRadius.only(
                     topLeft: Radius.circular(16),
                     topRight: Radius.circular(16),
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.5),
+                      color: Colors.black.withValues(alpha: 0.5),
                       blurRadius: 10,
                       offset: const Offset(0, -4),
                     ),
@@ -331,7 +335,7 @@ class _UpdateProductModalWidgetState extends State<UpdateProductModalWidget> {
                               style: const TextStyle(
                                 fontWeight: FontWeight.w900,
                                 fontSize: 18,
-                                color: Colors.orange,
+                                color: AppColors.primary,
                               ),
                             ),
                           ],
@@ -343,9 +347,9 @@ class _UpdateProductModalWidgetState extends State<UpdateProductModalWidget> {
                   ],
                 ),
               ),
-              SizedBox(height: 16),
+              const SizedBox(height: 16),
               Padding(
-                padding: EdgeInsets.all(20.0),
+                padding: const EdgeInsets.all(20.0),
                 child: Column(
                   children: [
                     Row(
@@ -360,7 +364,7 @@ class _UpdateProductModalWidgetState extends State<UpdateProductModalWidget> {
                               colors: [
                                 secondColor(
                                   widget.posMenusName,
-                                ).withOpacity(0.8),
+                                ).withValues(alpha: 0.8),
                                 baseColor(widget.posMenusName),
                               ],
                               begin: Alignment.topLeft,
@@ -371,7 +375,7 @@ class _UpdateProductModalWidgetState extends State<UpdateProductModalWidget> {
                               BoxShadow(
                                 color: baseColor(
                                   widget.posMenusName,
-                                ).withOpacity(0.3),
+                                ).withValues(alpha: 0.3),
                                 blurRadius: 8,
                                 offset: const Offset(0, 4),
                               ),
@@ -383,39 +387,32 @@ class _UpdateProductModalWidgetState extends State<UpdateProductModalWidget> {
                             child:
                                 (widget.imageUrl != null &&
                                     widget.imageUrl!.isNotEmpty)
-                                ? Image.network(
-                                    widget.imageUrl!,
-                                    width: 140,
-                                    height: 110,
+                                ? CachedNetworkImage(
+                                    imageUrl: widget.imageUrl!,
+                                    width: 240,
+                                    height: 210,
                                     fit: BoxFit.cover,
-                                    errorBuilder:
-                                        (context, error, stackTrace) => Text(
-                                          getInitials(widget.posMenusName),
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 48,
-                                            color: Colors.white,
-                                          ),
+                                    maxWidthDiskCache: 280,
+                                    maxHeightDiskCache: 220,
+                                    memCacheWidth: 240,
+                                    memCacheHeight: 210,
+                                    errorWidget: (context, url, error) => Text(
+                                      getInitials(widget.posMenusName),
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 48,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                    placeholder: (context, url) => const Center(
+                                      child: SizedBox.square(
+                                        dimension: 24,
+                                        child: CircularProgressIndicator(
+                                          color: Colors.white,
+                                          strokeWidth: 2,
                                         ),
-                                    loadingBuilder:
-                                        (context, child, loadingProgress) {
-                                          if (loadingProgress == null)
-                                            return child;
-                                          return Center(
-                                            child: CircularProgressIndicator(
-                                              color: Colors.white,
-                                              value:
-                                                  loadingProgress
-                                                          .expectedTotalBytes !=
-                                                      null
-                                                  ? loadingProgress
-                                                            .cumulativeBytesLoaded /
-                                                        loadingProgress
-                                                            .expectedTotalBytes!
-                                                  : null,
-                                            ),
-                                          );
-                                        },
+                                      ),
+                                    ),
                                   )
                                 : Text(
                                     getInitials(widget.posMenusName),
@@ -455,14 +452,16 @@ class _UpdateProductModalWidgetState extends State<UpdateProductModalWidget> {
                               // Custom Stepper Row
                               Row(
                                 children: [
-                                  _buildStepButton(
+                                  StepButton(
                                     icon: Icons.remove,
                                     color: Colors.grey[200]!,
                                     onTap: () {
-                                      if (quantity > 1)
+                                      if (quantity > 1) {
                                         setState(() => quantity--);
+                                      }
                                     },
-                                    onLongPress: _startDecreasing,
+                                    onLongPressStart: _startDecreasing,
+                                    onLongPressEnd: _stopTimer,
                                   ),
                                   Container(
                                     width: 60,
@@ -475,11 +474,13 @@ class _UpdateProductModalWidgetState extends State<UpdateProductModalWidget> {
                                       ),
                                     ),
                                   ),
-                                  _buildStepButton(
+                                  StepButton(
                                     icon: Icons.add,
-                                    color: Colors.amber,
+                                    iconColor: AppColors.white,
+                                    color: AppColors.primary,
                                     onTap: () => setState(() => quantity++),
-                                    onLongPress: _startIncreasing,
+                                    onLongPressStart: _startIncreasing,
+                                    onLongPressEnd: _stopTimer,
                                   ),
                                   const SizedBox(width: 12),
                                   // Badge Satuan
@@ -489,10 +490,10 @@ class _UpdateProductModalWidgetState extends State<UpdateProductModalWidget> {
                                       vertical: 6,
                                     ),
                                     decoration: BoxDecoration(
-                                      color: Colors.amber.shade50,
+                                      color: AppColors.primaryLight,
                                       borderRadius: BorderRadius.circular(8),
                                       border: Border.all(
-                                        color: Colors.amber.shade200,
+                                        color: AppColors.primaryAccent,
                                       ),
                                     ),
                                     child: const Text(
@@ -500,7 +501,7 @@ class _UpdateProductModalWidgetState extends State<UpdateProductModalWidget> {
                                       style: TextStyle(
                                         fontSize: 12,
                                         fontWeight: FontWeight.bold,
-                                        color: Colors.orange,
+                                        color: AppColors.black87,
                                       ),
                                     ),
                                   ),
@@ -513,7 +514,7 @@ class _UpdateProductModalWidgetState extends State<UpdateProductModalWidget> {
                     ),
                     if (widget.maxQty != null &&
                         (widget.maxQty ?? 0) > 0 &&
-                        widget.pos_cart_props != null)
+                        widget.posCartProps != null)
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -539,7 +540,7 @@ class _UpdateProductModalWidgetState extends State<UpdateProductModalWidget> {
                                             totalSelectedProps ==
                                                 (widget.maxQty! * quantity)
                                             ? Colors.green.shade700
-                                            : Colors.orange.shade700,
+                                            : Colors.red,
                                         fontSize: 14,
                                       ),
                                     ),
@@ -566,7 +567,7 @@ class _UpdateProductModalWidgetState extends State<UpdateProductModalWidget> {
                           Wrap(
                             spacing: 12,
                             runSpacing: 12,
-                            children: widget.pos_cart_props!.map((e) {
+                            children: widget.posCartProps!.map((e) {
                               final id = e["pos_menus_id"];
                               final int propsQuantity = selectedProps[id] ?? 0;
                               final bool isSelected = propsQuantity > 0;
@@ -589,7 +590,7 @@ class _UpdateProductModalWidgetState extends State<UpdateProductModalWidget> {
                                   decoration: BoxDecoration(
                                     // Warna background berubah berdasarkan status
                                     color: isSelected
-                                        ? Colors.amber
+                                        ? AppColors.primary
                                         : (isDisabled
                                               ? Colors.grey.shade100
                                               : Colors.white),
@@ -598,10 +599,10 @@ class _UpdateProductModalWidgetState extends State<UpdateProductModalWidget> {
                                     ), // Menggunakan Rounded tipis agar lebih modern
                                     border: Border.all(
                                       color: isSelected
-                                          ? Colors.amber.shade700
+                                          ? AppColors.primaryDark
                                           : (isDisabled
                                                 ? Colors.grey.shade300
-                                                : Colors.amber.shade200),
+                                                : AppColors.primaryAccent),
                                       width: 1.5,
                                     ),
                                   ),
@@ -612,7 +613,7 @@ class _UpdateProductModalWidgetState extends State<UpdateProductModalWidget> {
                                         e["pos_menus_name"],
                                         style: TextStyle(
                                           color: isSelected
-                                              ? Colors.black
+                                              ? Colors.white
                                               : (isDisabled
                                                     ? Colors.grey.shade400
                                                     : Colors.black87),
@@ -634,7 +635,7 @@ class _UpdateProductModalWidgetState extends State<UpdateProductModalWidget> {
                                             style: const TextStyle(
                                               fontSize: 10,
                                               fontWeight: FontWeight.bold,
-                                              color: Colors.orange,
+                                              color: AppColors.primaryDark,
                                             ),
                                           ),
                                         ),
@@ -697,7 +698,7 @@ class _UpdateProductModalWidgetState extends State<UpdateProductModalWidget> {
                                   focusedBorder: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(12),
                                     borderSide: const BorderSide(
-                                      color: Colors.amber,
+                                      color: AppColors.primary,
                                       width: 2,
                                     ),
                                   ),
@@ -725,10 +726,10 @@ class _UpdateProductModalWidgetState extends State<UpdateProductModalWidget> {
                                 minHeight: 54,
                                 minWidth: 60,
                               ),
-                              fillColor: Colors.amber,
-                              selectedColor: Colors.black,
+                              fillColor: AppColors.primary,
+                              selectedColor: Colors.white,
                               color: Colors.grey[600],
-                              selectedBorderColor: Colors.amber,
+                              selectedBorderColor: AppColors.primary,
                               borderColor: Colors.grey[300],
                               children: const [
                                 Text(
@@ -786,7 +787,7 @@ class _UpdateProductModalWidgetState extends State<UpdateProductModalWidget> {
         widget.maxQty == 0 ||
         totalSelectedProps == (widget.maxQty! * quantity);
 
-    Color btnColor = isPropsValid ? Colors.amber : Colors.grey.shade300;
+    Color btnColor = isPropsValid ? AppColors.primary : Colors.grey.shade300;
 
     return ElevatedButton(
       style: ElevatedButton.styleFrom(
@@ -814,30 +815,11 @@ class _UpdateProductModalWidgetState extends State<UpdateProductModalWidget> {
       },
       child: const Text(
         'Simpan',
-        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-      ),
-    );
-  }
-
-  Widget _buildStepButton({
-    required IconData icon,
-    required Color color,
-    required VoidCallback onTap,
-    required VoidCallback onLongPress,
-  }) {
-    return GestureDetector(
-      onLongPressStart: (_) => onLongPress(),
-      onLongPressEnd: (_) => _stopTimer(),
-      child: IconButton(
-        style: IconButton.styleFrom(
-          backgroundColor: color,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(50),
-          ),
-          minimumSize: const Size(45, 45),
+        style: TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.bold,
+          color: AppColors.white,
         ),
-        onPressed: onTap,
-        icon: Icon(icon, size: 22, color: Colors.black87),
       ),
     );
   }

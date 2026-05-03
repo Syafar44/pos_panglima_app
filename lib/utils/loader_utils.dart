@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:pos_panglima_app/utils/app_colors.dart';
 
 class ModernLoading extends StatefulWidget {
   final String? message;
@@ -41,7 +42,7 @@ class _ModernLoadingState extends State<ModernLoading> {
 
   @override
   Widget build(BuildContext context) {
-    final activeColor = widget.color ?? Colors.amber;
+    final activeColor = widget.color ?? AppColors.primary;
     final showRetryButton = _isTimedOut && widget.onRetry != null;
 
     return Column(
@@ -57,7 +58,7 @@ class _ModernLoadingState extends State<ModernLoading> {
                 child: CircularProgressIndicator(
                   strokeWidth: widget.strokeWidth,
                   valueColor: AlwaysStoppedAnimation<Color>(
-                    activeColor.withOpacity(0.2),
+                    activeColor.withValues(alpha: 0.2),
                   ),
                 ),
               ),
@@ -102,7 +103,7 @@ class _ModernLoadingState extends State<ModernLoading> {
             style: OutlinedButton.styleFrom(
               foregroundColor: Colors.red,
               backgroundColor: Colors.red.shade50,
-              side: BorderSide(
+              side: const BorderSide(
                 color: Colors.red,
                 width: 1.5,
               ), // Garis pinggir lebih tegas

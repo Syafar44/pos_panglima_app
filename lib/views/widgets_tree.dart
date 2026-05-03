@@ -34,13 +34,13 @@ class WidgetTree extends StatelessWidget {
             appBar: AppBar(
               title: Text(
                 pages[value]['name'],
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
               ),
               centerTitle: false,
               flexibleSpace: Container(
-                decoration: BoxDecoration(
+                decoration: const BoxDecoration(
                   image: DecorationImage(
-                    image: AssetImage("assets/images/background.jpg"),
+                    image: AssetImage("assets/images/background.png"),
                     fit: BoxFit.cover,
                     alignment: Alignment.topCenter,
                   ),

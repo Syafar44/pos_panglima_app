@@ -1,15 +1,16 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:pos_panglima_app/utils/app_colors.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:pos_panglima_app/services/auth_service.dart';
 import 'package:pos_panglima_app/services/helper/dio_client.dart';
 import 'package:pos_panglima_app/services/report_service.dart';
+import 'package:pos_panglima_app/utils/crash_reporter.dart';
 import 'package:pos_panglima_app/services/shift_service.dart';
 import 'package:pos_panglima_app/services/storage/shift_storage_service.dart';
 import 'package:pos_panglima_app/utils/convert.dart';
 import 'package:pos_panglima_app/utils/loader_utils.dart';
-import 'package:pos_panglima_app/utils/modal_handling.dart';
 import 'package:pos_panglima_app/utils/rupiah_formatter.dart';
 import 'package:pos_panglima_app/utils/snackbar_util.dart';
 import 'package:pos_panglima_app/views/pages/login_page.dart';
@@ -60,19 +61,16 @@ class _EndShiftModalState extends State<EndShiftModal> {
         profile = data;
         isLoadingProfile = false;
       });
-    } catch (e) {
+    } catch (e, stack) {
+      CrashReporter.report(e, stack, reason: 'endShift_modal.getProfile');
       if (!mounted) return;
       isLoadingProfile = false;
-      showDialog(
-        context: context,
-        builder: (context) {
-          return ModalHandling(
-            type: 'warning',
-            title: 'Gagal memuat data pengguna',
-            description:
-                'Terjadi kendala saat mengambil data pengguna. Mohon periksa koneksi atau coba kembali.',
-          );
-        },
+      SnackbarUtil.show(
+        context,
+        title: 'Gagal memuat data pengguna',
+        message:
+            'Terjadi kendala saat mengambil data pengguna. Mohon periksa koneksi atau coba kembali.',
+        status: SnackBarStatus.error,
       );
     }
   }
@@ -105,21 +103,24 @@ class _EndShiftModalState extends State<EndShiftModal> {
   Future<void> _getPenerimaan(shiftId) async {
     try {
       final response = await reportService.getPenerimaan(shiftId);
-      final result = response.data['data'] ?? {};
-      debugPrint('penerimaan result: $result');
       setState(() {
         reportData = response.data['data'] ?? {};
       });
-    } catch (e) {
+    } catch (e, stack) {
+      CrashReporter.report(e, stack, reason: 'endShift_modal.fetchReportData');
       if (!mounted) return;
       debugPrint('Error fetching report data: $e');
+      SnackbarUtil.show(
+        context,
+        title: 'Gagal memuat laporan',
+        message: 'Terjadi kendala saat mengambil data laporan.',
+        status: SnackBarStatus.error,
+      );
     }
   }
 
   void _autoFillSalesEnd(cash) {
-    if (reportData == null) return;
-
-    final totalPenerimaanNew = (reportData?['total_penerimaan'] ?? 0) as int;
+    final totalPenerimaanNew = (reportData['total_penerimaan'] ?? 0) as int;
     final cashActive = cash ?? 0;
     final total = totalPenerimaanNew + cashActive;
 
@@ -300,7 +301,7 @@ class _EndShiftModalState extends State<EndShiftModal> {
                 const SizedBox(width: 8),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.amber,
+                    backgroundColor: AppColors.primary,
                     foregroundColor: Colors.black87,
                     elevation: 0,
                     padding: const EdgeInsets.symmetric(
@@ -314,12 +315,11 @@ class _EndShiftModalState extends State<EndShiftModal> {
                   onPressed: () {
                     // Validasi: pastikan alasan tidak kosong
                     if (remarksControllers.text.trim().isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text("Mohon isi alasan selisih"),
-                          backgroundColor: Colors.red,
-                          behavior: SnackBarBehavior.floating,
-                        ),
+                      SnackbarUtil.show(
+                        context,
+                        title: "Input Wajib",
+                        message: "Mohon isi alasan selisih",
+                        status: SnackBarStatus.warning,
                       );
                     } else {
                       Navigator.pop(context, true);
@@ -405,21 +405,33 @@ class _EndShiftModalState extends State<EndShiftModal> {
         MaterialPageRoute(builder: (_) => const LoginPage(title: 'Login')),
         (route) => false,
       );
-    } on DioException catch (e) {
-      if (!mounted) return;
-      debugPrint('DioException: $e');
-      showDialog(
-        context: context,
-        builder: (context) {
-          return ModalHandling(
-            type: 'warning',
-            title: 'Gagal mengakhiri shift',
-            description:
-                'Terjadi kendala saat mengakhiri shift. Silakan coba kembali.',
-          );
+    } on DioException catch (e, stack) {
+      CrashReporter.report(
+        e,
+        stack,
+        reason: 'endShift_modal.endShift',
+        context: {
+          'endpoint': e.requestOptions.path,
+          'statusCode': e.response?.statusCode,
+          'responseData': e.response?.data?.toString(),
         },
       );
+      if (!mounted) return;
+      debugPrint('DioException: $e');
+      SnackbarUtil.show(
+        context,
+        title: 'Gagal mengakhiri shift',
+        message: 'Terjadi kendala saat mengakhiri shift. Silakan coba kembali.',
+        status: SnackBarStatus.error,
+      );
     }
+  }
+
+  @override
+  void dispose() {
+    controllerSalesEnd.dispose();
+    remarksControllers.dispose();
+    super.dispose();
   }
 
   @override
@@ -449,13 +461,13 @@ class _EndShiftModalState extends State<EndShiftModal> {
                   children: [
                     Container(
                       padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.amber.shade50,
+                      decoration: const BoxDecoration(
+                        color: AppColors.primaryLight,
                         shape: BoxShape.circle,
                       ),
                       child: const Icon(
                         Icons.logout_rounded,
-                        color: Colors.amber,
+                        color: AppColors.primary,
                         size: 32,
                       ),
                     ),
@@ -465,6 +477,7 @@ class _EndShiftModalState extends State<EndShiftModal> {
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 24,
+                        color: AppColors.black87,
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -494,13 +507,11 @@ class _EndShiftModalState extends State<EndShiftModal> {
                           const Divider(height: 24),
                           _buildInfoRow(
                             'Total Pendapatan System',
-                            reportData != null
-                                ? NumberFormat.currency(
-                                    locale: 'id_ID',
-                                    symbol: 'Rp ',
-                                    decimalDigits: 0,
-                                  ).format(totalPenerimaan)
-                                : '-',
+                            NumberFormat.currency(
+                              locale: 'id_ID',
+                              symbol: 'Rp ',
+                              decimalDigits: 0,
+                            ).format(totalPenerimaan),
                             isBold: true,
                             valueColor: Colors.black87,
                           ),
@@ -530,7 +541,9 @@ class _EndShiftModalState extends State<EndShiftModal> {
                         hintText: '0',
                         prefixIcon: const Icon(Icons.payments_outlined),
                         filled: true,
-                        fillColor: Colors.amber.shade50.withOpacity(0.3),
+                        fillColor: AppColors.primaryLight.withValues(
+                          alpha: 0.3,
+                        ),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(16.0),
                         ),
@@ -541,7 +554,7 @@ class _EndShiftModalState extends State<EndShiftModal> {
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(16.0),
                           borderSide: const BorderSide(
-                            color: Colors.amber,
+                            color: AppColors.primary,
                             width: 2,
                           ),
                         ),
@@ -575,8 +588,8 @@ class _EndShiftModalState extends State<EndShiftModal> {
                                 ? null
                                 : submitEndShift,
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.amber,
-                              foregroundColor: Colors.black87,
+                              backgroundColor: AppColors.primary,
+                              foregroundColor: Colors.white,
                               disabledBackgroundColor: Colors.grey.shade200,
                               padding: const EdgeInsets.symmetric(vertical: 16),
                               elevation: 0,

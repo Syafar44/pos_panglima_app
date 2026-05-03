@@ -2,12 +2,12 @@ import 'dart:io';
 import 'package:connectivity_plus/connectivity_plus.dart';
 
 class NetworkService {
-  /// Cek apakah benar-benar online
   static Future<bool> isOnline() async {
     try {
       final connectivityResult = await Connectivity().checkConnectivity();
 
-      if (connectivityResult == ConnectivityResult.none) {
+      if (connectivityResult.isEmpty ||
+          connectivityResult.every((r) => r == ConnectivityResult.none)) {
         return false;
       }
 

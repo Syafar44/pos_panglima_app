@@ -1,7 +1,10 @@
 class AppConfig {
-  static const String version = '1.1.6';
+  static const String version = '2.0.1';
   static const String whatsapp = '082220002237';
-  static const String instagram = '@Jajanpanglima';
-  static const String facebook = '@Jajan Panglima';
-  static const String website = 'www.rotigembungpanglima.com';
+  static const String instagramRGP = '@rotigembungpanglima';
+  static const String instagramGP = '@geraipanglima';
+  static const String facebookRGP = '@Jajan Panglima';
+  static const String facebookGP = '@Gerai Panglima';
+  static const String websiteRGP = 'www.rotigembungpanglima.com';
+  static const String websiteGP = 'www.geraipanglima.com';
 }

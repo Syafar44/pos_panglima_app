@@ -25,6 +25,9 @@ class InventoryService {
   }
 
   Future<Response> patchRealisasi(int id, Map<String, dynamic> payload) {
-    return dio.patch("/inventory/inventory_transfer/$id/realisasi", data: payload);
+    return dio.patch(
+      "/inventory/inventory_transfer/$id/realisasi",
+      data: payload,
+    );
   }
 }

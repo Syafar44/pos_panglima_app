@@ -4,9 +4,10 @@ import 'package:pos_panglima_app/data/notifiers.dart';
 import 'package:pos_panglima_app/services/auth_service.dart';
 import 'package:pos_panglima_app/services/helper/dio_client.dart';
 import 'package:pos_panglima_app/services/inventory_service.dart';
+import 'package:pos_panglima_app/utils/app_colors.dart';
 import 'package:pos_panglima_app/utils/convert.dart';
+import 'package:pos_panglima_app/utils/crash_reporter.dart';
 import 'package:pos_panglima_app/utils/loader_utils.dart';
-import 'package:pos_panglima_app/utils/modal_handling.dart';
 import 'package:pos_panglima_app/utils/notif_utils.dart';
 import 'package:pos_panglima_app/utils/snackbar_util.dart';
 import 'package:pos_panglima_app/views/widgets/confirm_modal.dart';
@@ -33,6 +34,11 @@ class _ReceptionInventoryPageState extends State<ReceptionInventoryPage> {
   final Map<int, TextEditingController> realisasiControllers = {};
   final Map<int, TextEditingController> remarksControllers = {};
   dynamic focusedItemId;
+  bool _isPortrait = false;
+
+  void _toggleOrientation() {
+    setState(() => _isPortrait = !_isPortrait);
+  }
 
   @override
   void initState() {
@@ -50,8 +56,6 @@ class _ReceptionInventoryPageState extends State<ReceptionInventoryPage> {
       setState(() {
         inventoryDetail = response.data['data'];
       });
-
-      debugPrint(inventoryDetail.toString());
 
       final lines = response.data['data']['inventory_transfer_lines'];
 
@@ -73,12 +77,18 @@ class _ReceptionInventoryPageState extends State<ReceptionInventoryPage> {
       }
 
       setState(() => isLoading = false);
-    } catch (e) {
+    } catch (e, stack) {
+      CrashReporter.report(
+        e,
+        stack,
+        reason: 'reception_inventory_page.getInventoryTransferDetail',
+      );
       if (!mounted) return;
       SnackbarUtil.show(
         context,
         title: "Gagal memuat data inventory",
-        message: "Terjadi kendala saat mengambil data inventory. Mohon periksa koneksi atau coba kembali.",
+        message:
+            "Terjadi kendala saat mengambil data inventory. Mohon periksa koneksi atau coba kembali.",
         status: SnackBarStatus.error,
       );
     }
@@ -94,12 +104,18 @@ class _ReceptionInventoryPageState extends State<ReceptionInventoryPage> {
         profile = response.data['data'];
         isLoadingProfile = false;
       });
-    } catch (e) {
+    } catch (e, stack) {
+      CrashReporter.report(
+        e,
+        stack,
+        reason: 'reception_inventory_page.getProfile',
+      );
       if (!mounted) return;
       SnackbarUtil.show(
         context,
         title: "Gagal memuat data pengguna",
-        message: "Terjadi kendala saat mengambil data pengguna. Mohon periksa koneksi atau coba kembali.",
+        message:
+            "Terjadi kendala saat mengambil data pengguna. Mohon periksa koneksi atau coba kembali.",
         status: SnackBarStatus.error,
       );
     }
@@ -134,7 +150,9 @@ class _ReceptionInventoryPageState extends State<ReceptionInventoryPage> {
       "approve_date": DateTime.now().toString(),
       "inventory_transfer_lines": lines.map((line) {
         final double qty = (line['quantity'] ?? 0).toDouble();
-        final double realisasi = double.tryParse(realisasiControllers[line['id']]?.text ?? '0') ?? 0.0;
+        final double realisasi =
+            double.tryParse(realisasiControllers[line['id']]?.text ?? '0') ??
+            0.0;
 
         return {
           "id": line['id'],
@@ -188,19 +206,31 @@ class _ReceptionInventoryPageState extends State<ReceptionInventoryPage> {
 
       resetNotif();
 
+      selectedPageInventoryNotifier.value = 1;
       selectedPageNotifier.value = 3;
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(builder: (_) => WidgetTree()),
+        MaterialPageRoute(builder: (_) => const WidgetTree()),
         (route) => false,
       );
-    } on DioException catch (e) {
+    } on DioException catch (e, stack) {
+      CrashReporter.report(
+        e,
+        stack,
+        reason: 'reception_inventory_page.submitRealisasi',
+        context: {
+          'endpoint': e.requestOptions.path,
+          'statusCode': e.response?.statusCode,
+          'responseData': e.response?.data?.toString(),
+        },
+      );
       if (!mounted) return;
       debugPrint("DioException: ${e.response?.data ?? e.message}");
       SnackbarUtil.show(
         context,
         title: "Gagal menyimpan penerimaan",
-        message: "Terjadi kendala saat menyimpan penerimaan. Mohon periksa koneksi atau coba kembali.",
+        message:
+            "Terjadi kendala saat menyimpan penerimaan. Mohon periksa koneksi atau coba kembali.",
         status: SnackBarStatus.error,
       );
     }
@@ -213,7 +243,9 @@ class _ReceptionInventoryPageState extends State<ReceptionInventoryPage> {
     return lines
         .where((line) {
           final double qty = (line['quantity'] ?? 0).toDouble();
-          final double realisasi = double.tryParse(realisasiControllers[line['id']]?.text ?? '0') ?? 0;
+          final double realisasi =
+              double.tryParse(realisasiControllers[line['id']]?.text ?? '0') ??
+              0;
           return realisasi < qty;
         })
         .map((line) => line as Map<String, dynamic>)
@@ -287,64 +319,63 @@ class _ReceptionInventoryPageState extends State<ReceptionInventoryPage> {
               ),
               content: SizedBox(
                 width: MediaQuery.of(context).size.width * 0.9,
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: items.map((item) {
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 16),
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade50,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.grey.shade200),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              item['item_name'] ?? '-',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 14,
-                              ),
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: items.length,
+                  itemBuilder: (ctx, i) {
+                    final item = items[i];
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 16),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade50,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.grey.shade200),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            item['item_name'] ?? '-',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
                             ),
-                            const SizedBox(height: 4),
-                            Text(
-                              "Selisih: ${item['quantity'] - realisasiQty} ${item['uoms_code']}",
-                              style: TextStyle(
-                                color: Colors.red.shade700,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                              ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            "Selisih: ${item['quantity'] - realisasiQty} ${item['uoms_code']}",
+                            style: TextStyle(
+                              color: Colors.red.shade700,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
                             ),
-                            const SizedBox(height: 10),
-                            TextField(
-                              controller: remarksControllers[item['id']],
-                              maxLines: 2,
-                              decoration: InputDecoration(
-                                hintText:
-                                    "Contoh: Barang rusak di perjalanan...",
-                                hintStyle: TextStyle(
-                                  fontSize: 13,
-                                  color: Colors.grey.shade400,
+                          ),
+                          const SizedBox(height: 10),
+                          TextField(
+                            controller: remarksControllers[item['id']],
+                            maxLines: 2,
+                            decoration: InputDecoration(
+                              hintText: "Contoh: Barang rusak di perjalanan...",
+                              hintStyle: TextStyle(
+                                fontSize: 13,
+                                color: Colors.grey.shade400,
+                              ),
+                              fillColor: Colors.white,
+                              filled: true,
+                              isDense: true,
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide: BorderSide(
+                                  color: Colors.grey.shade300,
                                 ),
-                                fillColor: Colors.white,
-                                filled: true,
-                                isDense: true,
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                  borderSide: BorderSide(
-                                    color: Colors.grey.shade300,
-                                  ),
-                                ),
                               ),
                             ),
-                          ],
-                        ),
-                      );
-                    }).toList(),
-                  ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
                 ),
               ),
               actionsPadding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
@@ -363,8 +394,8 @@ class _ReceptionInventoryPageState extends State<ReceptionInventoryPage> {
                 SizedBox(
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.amber,
-                      foregroundColor: Colors.black87,
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
                       elevation: 0,
                       padding: const EdgeInsets.symmetric(
                         vertical: 12,
@@ -421,15 +452,8 @@ class _ReceptionInventoryPageState extends State<ReceptionInventoryPage> {
       final controller = realisasiControllers[line['id']];
       final double realisasi = double.tryParse(controller?.text ?? '0') ?? 0;
 
-      debugPrint("Validasi $itemName: realisasi=$realisasi, qtyKirim=$qtyKirim");
-
       if (realisasi > qtyKirim) {
-        // 1. Berikan feedback getaran atau warna jika memungkinkan (Opsional)
-
-        // 2. Tampilkan SnackBar dengan gaya yang lebih "Alert"
-        ScaffoldMessenger.of(
-          context,
-        ).hideCurrentSnackBar(); // Hapus snackbar sebelumnya agar tidak antre
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             elevation: 3,
@@ -461,7 +485,25 @@ class _ReceptionInventoryPageState extends State<ReceptionInventoryPage> {
   }
 
   @override
+  void dispose() {
+    for (final c in realisasiControllers.values) {
+      c.dispose();
+    }
+    for (final c in remarksControllers.values) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    return RotatedBox(
+      quarterTurns: _isPortrait ? 3 : 0,
+      child: _buildScaffold(context),
+    );
+  }
+
+  Widget _buildScaffold(BuildContext context) {
     return Scaffold(
       resizeToAvoidBottomInset: false,
       appBar: AppBar(
@@ -478,6 +520,17 @@ class _ReceptionInventoryPageState extends State<ReceptionInventoryPage> {
             letterSpacing: 0.5, // Memberikan kesan modern pada teks
           ),
         ),
+        actions: [
+          IconButton(
+            icon: Icon(
+              _isPortrait
+                  ? Icons.stay_current_landscape_outlined
+                  : Icons.stay_current_portrait_outlined,
+            ),
+            tooltip: _isPortrait ? 'Mode Landscape' : 'Mode Potret',
+            onPressed: _toggleOrientation,
+          ),
+        ],
         shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(
             bottom: Radius.circular(16), // Sedikit melengkung di sudut bawah
@@ -485,7 +538,8 @@ class _ReceptionInventoryPageState extends State<ReceptionInventoryPage> {
         ),
       ),
       body: isLoading || isLoadingProfile
-          ? Center(child: ModernLoading(
+          ? Center(
+              child: ModernLoading(
                 timeout: const Duration(seconds: 10),
                 onRetry: () {
                   setState(() {
@@ -788,7 +842,9 @@ class _ReceptionInventoryPageState extends State<ReceptionInventoryPage> {
                                                       OutlineInputBorder(
                                                         borderSide: BorderSide(
                                                           color: inputColor
-                                                              .withOpacity(0.3),
+                                                              .withValues(
+                                                                alpha: 0.3,
+                                                              ),
                                                         ),
                                                         borderRadius:
                                                             BorderRadius.circular(
@@ -845,7 +901,7 @@ class _ReceptionInventoryPageState extends State<ReceptionInventoryPage> {
                       ),
                     ),
                   ),
-                  SizedBox(height: 10),
+                  const SizedBox(height: 10),
                   if (inventoryDetail?['approve'] != 1)
                     Column(
                       mainAxisSize: MainAxisSize
@@ -886,22 +942,21 @@ class _ReceptionInventoryPageState extends State<ReceptionInventoryPage> {
 
                         // Tombol Aksi
                         SizedBox(
-                          width: double
-                              .infinity,
+                          width: double.infinity,
                           height: 48,
                           child: ElevatedButton(
                             onPressed: submitRealisasi,
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.amber,
-                              foregroundColor: Colors.black87,
+                              backgroundColor: AppColors.primary,
+                              foregroundColor: Colors.white,
                               elevation: 0,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12),
                               ),
                             ),
-                            child: Row(
+                            child: const Row(
                               mainAxisAlignment: MainAxisAlignment.center,
-                              children: const [
+                              children: [
                                 Icon(Icons.check_circle_outline),
                                 SizedBox(width: 8),
                                 Text(

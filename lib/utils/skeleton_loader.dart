@@ -223,7 +223,7 @@ class SkeletonLoader {
               children: List.generate(
                 2,
                 (index) => Container(
-                  margin: EdgeInsets.only(bottom: 24),
+                  margin: const EdgeInsets.only(bottom: 24),
                   height: 150,
                   decoration: BoxDecoration(
                     color: Colors.white,

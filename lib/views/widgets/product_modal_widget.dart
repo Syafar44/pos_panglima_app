@@ -1,9 +1,12 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:pos_panglima_app/utils/app_colors.dart';
 import 'package:pos_panglima_app/services/cart_service.dart';
 import 'package:pos_panglima_app/services/helper/dio_client.dart';
 import 'package:pos_panglima_app/services/storage/shift_storage_service.dart';
 import 'package:pos_panglima_app/utils/convert.dart';
+import 'package:pos_panglima_app/utils/crash_reporter.dart';
 import 'package:pos_panglima_app/utils/modal_insufficient_stock.dart';
 import 'package:pos_panglima_app/utils/quantity_timer_mixin.dart';
 import 'package:pos_panglima_app/utils/snackbar_util.dart';
@@ -69,16 +72,14 @@ class _ProductModalWidgetState extends State<ProductModalWidget>
   }
 
   void onTapVariant(Map<String, dynamic> item) {
-    final max = widget.maxProduk ?? 0;
+    final maxTotal = (widget.maxProduk ?? 0) * quantity;
     final id = (item["id"]);
 
-    if (totalSelectedProps >= max && !selectedProps.containsKey(id)) return;
+    if (totalSelectedProps >= maxTotal) return;
 
     setState(() {
       selectedProps[id] = (selectedProps[id] ?? 0) + 1;
     });
-
-    debugPrint('selectedProps: $selectedProps');
   }
 
   void resetVariants() {
@@ -139,7 +140,17 @@ class _ProductModalWidgetState extends State<ProductModalWidget>
       if (!mounted) return;
       Navigator.of(context).pop();
       widget.onSaved();
-    } on DioException catch (e) {
+    } on DioException catch (e, stack) {
+      CrashReporter.report(
+        e,
+        stack,
+        reason: 'product_modal_widget.addToCart',
+        context: {
+          'endpoint': e.requestOptions.path,
+          'statusCode': e.response?.statusCode,
+          'responseData': e.response?.data?.toString(),
+        },
+      );
       if (!mounted) return;
       final String message = e.response?.data['message'] ?? 'Terjadi kesalahan';
 
@@ -164,15 +175,6 @@ class _ProductModalWidgetState extends State<ProductModalWidget>
   }
 
   void _showWarningShift() {
-    // showDialog(
-    //   context: context,
-    //   builder: (context) => ModalHandling(
-    //     type: 'warning',
-    //     title: 'Perhatian',
-    //     description:
-    //         'Shift belum dimulai. Mulai shift terlebih dahulu untuk melakukan transaksi.',
-    //   ),
-    // );
     SnackbarUtil.show(
       context,
       title: "Mulai Shift terlebih dahulu",
@@ -185,6 +187,7 @@ class _ProductModalWidgetState extends State<ProductModalWidget>
   @override
   void dispose() {
     disposeTimer();
+    diskonController.dispose();
     super.dispose();
   }
 
@@ -192,10 +195,10 @@ class _ProductModalWidgetState extends State<ProductModalWidget>
   Widget build(BuildContext context) {
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      insetPadding: EdgeInsets.all(16),
+      insetPadding: const EdgeInsets.all(16),
       child: SingleChildScrollView(
         child: Container(
-          decoration: BoxDecoration(
+          decoration: const BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.all(Radius.circular(20.0)),
           ),
@@ -219,8 +222,8 @@ class _ProductModalWidgetState extends State<ProductModalWidget>
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(
-                        0.3,
+                      color: Colors.black.withValues(
+                        alpha: 0.3,
                       ), // Diperhalus dari 0.5 ke 0.05 agar lebih modern
                       blurRadius: 10,
                       offset: const Offset(0, -4),
@@ -299,7 +302,7 @@ class _ProductModalWidgetState extends State<ProductModalWidget>
                               style: const TextStyle(
                                 fontWeight: FontWeight.w900,
                                 fontSize: 18,
-                                color: Colors.orange,
+                                color: AppColors.primary,
                               ),
                             ),
                           ],
@@ -312,9 +315,9 @@ class _ProductModalWidgetState extends State<ProductModalWidget>
                 ),
               ),
 
-              SizedBox(height: 16),
+              const SizedBox(height: 16),
               Padding(
-                padding: EdgeInsets.all(20.0),
+                padding: const EdgeInsets.all(20.0),
                 child: Column(
                   children: [
                     Row(
@@ -327,7 +330,9 @@ class _ProductModalWidgetState extends State<ProductModalWidget>
                           decoration: BoxDecoration(
                             gradient: LinearGradient(
                               colors: [
-                                secondColor(widget.title).withOpacity(0.8),
+                                secondColor(
+                                  widget.title,
+                                ).withValues(alpha: 0.8),
                                 baseColor(widget.title),
                               ],
                               begin: Alignment.topLeft,
@@ -336,7 +341,9 @@ class _ProductModalWidgetState extends State<ProductModalWidget>
                             borderRadius: BorderRadius.circular(16),
                             boxShadow: [
                               BoxShadow(
-                                color: baseColor(widget.title).withOpacity(0.3),
+                                color: baseColor(
+                                  widget.title,
+                                ).withValues(alpha: 0.3),
                                 blurRadius: 8,
                                 offset: const Offset(0, 4),
                               ),
@@ -348,39 +355,32 @@ class _ProductModalWidgetState extends State<ProductModalWidget>
                             child:
                                 (widget.imageUrl != null &&
                                     widget.imageUrl!.isNotEmpty)
-                                ? Image.network(
-                                    widget.imageUrl!,
-                                    width: 140,
-                                    height: 110,
+                                ? CachedNetworkImage(
+                                    imageUrl: widget.imageUrl!,
+                                    width: 240,
+                                    height: 210,
                                     fit: BoxFit.cover,
-                                    errorBuilder:
-                                        (context, error, stackTrace) => Text(
-                                          getInitials(widget.title),
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 48,
-                                            color: Colors.white,
-                                          ),
+                                    maxWidthDiskCache: 280,
+                                    maxHeightDiskCache: 220,
+                                    memCacheWidth: 240,
+                                    memCacheHeight: 210,
+                                    errorWidget: (context, url, error) => Text(
+                                      getInitials(widget.title),
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 48,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                    placeholder: (context, url) => const Center(
+                                      child: SizedBox.square(
+                                        dimension: 24,
+                                        child: CircularProgressIndicator(
+                                          color: Colors.white,
+                                          strokeWidth: 2,
                                         ),
-                                    loadingBuilder:
-                                        (context, child, loadingProgress) {
-                                          if (loadingProgress == null)
-                                            return child;
-                                          return Center(
-                                            child: CircularProgressIndicator(
-                                              color: Colors.white,
-                                              value:
-                                                  loadingProgress
-                                                          .expectedTotalBytes !=
-                                                      null
-                                                  ? loadingProgress
-                                                            .cumulativeBytesLoaded /
-                                                        loadingProgress
-                                                            .expectedTotalBytes!
-                                                  : null,
-                                            ),
-                                          );
-                                        },
+                                      ),
+                                    ),
                                   )
                                 : Text(
                                     getInitials(widget.title),
@@ -393,8 +393,6 @@ class _ProductModalWidgetState extends State<ProductModalWidget>
                           ),
                         ),
                         const SizedBox(width: 20),
-
-                        // Bagian Informasi & Stepper
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -405,7 +403,7 @@ class _ProductModalWidgetState extends State<ProductModalWidget>
                                   fontWeight: FontWeight.w900,
                                   fontSize: 26,
                                   letterSpacing: -0.5,
-                                  color: Colors.black87,
+                                  color: AppColors.black87,
                                 ),
                               ),
                               Text(
@@ -424,8 +422,9 @@ class _ProductModalWidgetState extends State<ProductModalWidget>
                                     icon: Icons.remove,
                                     color: Colors.grey[200]!,
                                     onTap: () {
-                                      if (quantity > 1)
+                                      if (quantity > 1) {
                                         setState(() => quantity--);
+                                      }
                                     },
                                     onLongPressStart: () =>
                                         startTimer(_decreaseQuantity),
@@ -444,7 +443,8 @@ class _ProductModalWidgetState extends State<ProductModalWidget>
                                   ),
                                   StepButton(
                                     icon: Icons.add,
-                                    color: Colors.amber,
+                                    iconColor: AppColors.white,
+                                    color: AppColors.primary,
                                     onTap: () => setState(() => quantity++),
                                     onLongPressStart: () =>
                                         startTimer(_increaseQuantity),
@@ -458,10 +458,10 @@ class _ProductModalWidgetState extends State<ProductModalWidget>
                                       vertical: 6,
                                     ),
                                     decoration: BoxDecoration(
-                                      color: Colors.amber.shade50,
+                                      color: AppColors.primaryLight,
                                       borderRadius: BorderRadius.circular(8),
                                       border: Border.all(
-                                        color: Colors.amber.shade200,
+                                        color: AppColors.primaryAccent,
                                       ),
                                     ),
                                     child: const Text(
@@ -469,7 +469,7 @@ class _ProductModalWidgetState extends State<ProductModalWidget>
                                       style: TextStyle(
                                         fontSize: 12,
                                         fontWeight: FontWeight.bold,
-                                        color: Colors.orange,
+                                        color: AppColors.black87,
                                       ),
                                     ),
                                   ),
@@ -508,7 +508,7 @@ class _ProductModalWidgetState extends State<ProductModalWidget>
                                             totalSelectedProps ==
                                                 (widget.maxProduk! * quantity)
                                             ? Colors.green.shade700
-                                            : Colors.orange.shade700,
+                                            : Colors.red,
                                         fontSize: 14,
                                       ),
                                     ),
@@ -558,7 +558,7 @@ class _ProductModalWidgetState extends State<ProductModalWidget>
                                   decoration: BoxDecoration(
                                     // Warna background berubah berdasarkan status
                                     color: isSelected
-                                        ? Colors.amber
+                                        ? AppColors.primary
                                         : (isDisabled
                                               ? Colors.grey.shade100
                                               : Colors.white),
@@ -567,10 +567,10 @@ class _ProductModalWidgetState extends State<ProductModalWidget>
                                     ), // Menggunakan Rounded tipis agar lebih modern
                                     border: Border.all(
                                       color: isSelected
-                                          ? Colors.amber.shade700
+                                          ? AppColors.primaryDark
                                           : (isDisabled
                                                 ? Colors.grey.shade300
-                                                : Colors.amber.shade200),
+                                                : AppColors.primaryAccent),
                                       width: 1.5,
                                     ),
                                   ),
@@ -581,10 +581,10 @@ class _ProductModalWidgetState extends State<ProductModalWidget>
                                         e["title"],
                                         style: TextStyle(
                                           color: isSelected
-                                              ? Colors.black
+                                              ? Colors.white
                                               : (isDisabled
                                                     ? Colors.grey.shade400
-                                                    : Colors.black87),
+                                                    : AppColors.black87),
                                           fontWeight: isSelected
                                               ? FontWeight.bold
                                               : FontWeight.w500,
@@ -603,7 +603,7 @@ class _ProductModalWidgetState extends State<ProductModalWidget>
                                             style: const TextStyle(
                                               fontSize: 10,
                                               fontWeight: FontWeight.bold,
-                                              color: Colors.orange,
+                                              color: AppColors.primaryDark,
                                             ),
                                           ),
                                         ),
@@ -666,7 +666,7 @@ class _ProductModalWidgetState extends State<ProductModalWidget>
                                   focusedBorder: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(12),
                                     borderSide: const BorderSide(
-                                      color: Colors.amber,
+                                      color: AppColors.primary,
                                       width: 2,
                                     ),
                                   ),
@@ -694,10 +694,10 @@ class _ProductModalWidgetState extends State<ProductModalWidget>
                                 minHeight: 54,
                                 minWidth: 60,
                               ),
-                              fillColor: Colors.amber,
-                              selectedColor: Colors.black,
+                              fillColor: AppColors.primary,
+                              selectedColor: Colors.white,
                               color: Colors.grey[600],
-                              selectedBorderColor: Colors.amber,
+                              selectedBorderColor: AppColors.primary,
                               borderColor: Colors.grey[300],
                               children: const [
                                 Text(
@@ -756,7 +756,7 @@ class _ProductModalWidgetState extends State<ProductModalWidget>
         totalSelectedProps == (widget.maxProduk! * quantity);
 
     Color btnColor = isPropsValid && !isSubmitting
-        ? Colors.amber
+        ? AppColors.primary
         : Colors.grey.shade300;
 
     return ElevatedButton(
@@ -785,12 +785,12 @@ class _ProductModalWidgetState extends State<ProductModalWidget>
               savedToCart();
             },
       child: isSubmitting
-          ? Padding(
-              padding: const EdgeInsets.symmetric(
+          ? const Padding(
+              padding: EdgeInsets.symmetric(
                 horizontal: 16.0,
                 vertical: 2.0,
               ),
-              child: const SizedBox(
+              child: SizedBox(
                 width: 20,
                 height: 20,
                 child: CircularProgressIndicator(
@@ -801,7 +801,11 @@ class _ProductModalWidgetState extends State<ProductModalWidget>
             )
           : const Text(
               'Simpan',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: AppColors.white,
+              ),
             ),
     );
   }

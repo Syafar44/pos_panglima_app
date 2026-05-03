@@ -12,4 +12,8 @@ class ShiftService {
   Future<Response> endShift(int id, Map<String, dynamic> payload) {
     return dio.patch("/pos/shifts/$id", data: payload);
   }
+
+  Future<Response> getCurrentShift(int outletHubId) {
+    return dio.get('/pos/shifts/outlet_hub/$outletHubId');
+  }
 }

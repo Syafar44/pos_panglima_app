@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:pos_panglima_app/utils/app_colors.dart';
 import 'package:flutter_barcode_listener/flutter_barcode_listener.dart';
 import 'package:pos_panglima_app/data/notifiers.dart';
 // import 'package:pos_panglima_app/services/auth_service.dart';
@@ -10,6 +11,7 @@ import 'package:pos_panglima_app/services/helper/dio_client.dart';
 import 'package:pos_panglima_app/services/menu_service.dart';
 import 'package:pos_panglima_app/services/storage/shift_storage_service.dart';
 import 'package:pos_panglima_app/utils/convert.dart';
+import 'package:pos_panglima_app/utils/crash_reporter.dart';
 import 'package:pos_panglima_app/utils/modal_insufficient_stock.dart';
 import 'package:pos_panglima_app/utils/skeleton_loader.dart';
 import 'package:pos_panglima_app/utils/snackbar_util.dart';
@@ -85,7 +87,8 @@ class _PesananBaruPageState extends State<PesananBaruPage>
     try {
       await cartService.minusCart(id);
       loadCart();
-    } catch (e) {
+    } catch (e, stack) {
+      CrashReporter.report(e, stack, reason: 'pesanan_baru_page._decreaseQuantity');
       if (!mounted) return;
       loadCart();
       SnackbarUtil.show(
@@ -102,7 +105,17 @@ class _PesananBaruPageState extends State<PesananBaruPage>
     try {
       await cartService.plusCart(id);
       loadCart();
-    } on DioException catch (e) {
+    } on DioException catch (e, stack) {
+      CrashReporter.report(
+        e,
+        stack,
+        reason: 'pesanan_baru_page._increaseQuantity',
+        context: {
+          'endpoint': e.requestOptions.path,
+          'statusCode': e.response?.statusCode,
+          'responseData': e.response?.data?.toString(),
+        },
+      );
       if (!mounted) return;
       final String message = e.response?.data['message'] ?? 'Terjadi kesalahan';
 
@@ -124,7 +137,8 @@ class _PesananBaruPageState extends State<PesananBaruPage>
 
     try {
       await cartService.deleteCart(id);
-    } catch (e) {
+    } catch (e, stack) {
+      CrashReporter.report(e, stack, reason: 'pesanan_baru_page._deletedCartItem');
       if (!mounted) return;
       SnackbarUtil.show(
         context,
@@ -182,7 +196,7 @@ class _PesananBaruPageState extends State<PesananBaruPage>
           value: e['category'],
           label: e['category'],
         );
-      }).toList(),
+      }),
     ];
   }
 
@@ -202,7 +216,8 @@ class _PesananBaruPageState extends State<PesananBaruPage>
         menuList = enrichedList;
         isLoadingMenu = false;
       });
-    } catch (e) {
+    } catch (e, stack) {
+      CrashReporter.report(e, stack, reason: 'pesanan_baru_page.getMenu');
       if (!mounted) return;
       SnackbarUtil.show(
         context,
@@ -217,7 +232,6 @@ class _PesananBaruPageState extends State<PesananBaruPage>
   Future<void> loadCart() async {
     try {
       final getCart = await cartService.getCart();
-      debugPrint('getCart: $getCart');
       final newItems = List<Map<String, dynamic>>.from(
         getCart.data['data'] ?? [],
       );
@@ -233,7 +247,8 @@ class _PesananBaruPageState extends State<PesananBaruPage>
         cartItems = newItems;
         totalPayment = newTotalPayment;
       });
-    } catch (e) {
+    } catch (e, stack) {
+      CrashReporter.report(e, stack, reason: 'pesanan_baru_page.loadCart');
       if (!mounted) return;
       setState(() {
         cartItems = [];
@@ -265,7 +280,17 @@ class _PesananBaruPageState extends State<PesananBaruPage>
 
     try {
       await cartService.postCart(payload);
-    } on DioException catch (e) {
+    } on DioException catch (e, stack) {
+      CrashReporter.report(
+        e,
+        stack,
+        reason: 'pesanan_baru_page.savedToCart',
+        context: {
+          'endpoint': e.requestOptions.path,
+          'statusCode': e.response?.statusCode,
+          'responseData': e.response?.data?.toString(),
+        },
+      );
       final message = e.response?.data['message'] ?? 'Terjadi kesalahan';
       if (!mounted) return;
       if (message.contains('insufficient_stock')) {
@@ -369,7 +394,7 @@ class _PesananBaruPageState extends State<PesananBaruPage>
         savedToCart(
           foundProduct['id'],
           foundProduct['price'] ?? 0,
-          () => loadCart(),
+          loadCart,
         );
         if (mounted) {
           SnackbarUtil.show(
@@ -441,7 +466,7 @@ class _PesananBaruPageState extends State<PesananBaruPage>
           maxQty: item['max_qty'],
           imageUrl: item['image_url'],
 
-          pos_cart_props: item['pos_cart_props'] ?? [],
+          posCartProps: item['pos_cart_props'] ?? [],
 
           // Logika pengecekan koleksi (boolean)
           collection:
@@ -457,6 +482,7 @@ class _PesananBaruPageState extends State<PesananBaruPage>
     );
   }
 
+  @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _checkPendingNotif();
@@ -480,6 +506,9 @@ class _PesananBaruPageState extends State<PesananBaruPage>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     searchController.dispose();
+    categoryController.dispose();
+    pelangganController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -510,14 +539,14 @@ class _PesananBaruPageState extends State<PesananBaruPage>
                               constraints.maxWidth - actionWidth;
 
                           return Container(
-                            height: 56, // Tinggi standar yang nyaman
+                            height: 56,
                             decoration: BoxDecoration(
                               color: Colors.white,
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(color: Colors.grey.shade200),
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.black.withOpacity(0.04),
+                                  color: Colors.black.withValues(alpha: 0.04),
                                   blurRadius: 8,
                                   offset: const Offset(0, 2),
                                 ),
@@ -585,7 +614,7 @@ class _PesananBaruPageState extends State<PesananBaruPage>
                                             savedToCart(
                                               e['id'],
                                               e['price'] ?? 0,
-                                              () => loadCart(),
+                                              loadCart,
                                             );
                                           }
                                         },
@@ -602,7 +631,7 @@ class _PesananBaruPageState extends State<PesananBaruPage>
               Expanded(
                 flex: 1,
                 child: Container(
-                  decoration: BoxDecoration(
+                  decoration: const BoxDecoration(
                     border: Border(left: BorderSide(color: Colors.black26)),
                   ),
                   child: Column(
@@ -611,7 +640,7 @@ class _PesananBaruPageState extends State<PesananBaruPage>
                       LayoutBuilder(
                         builder: (context, constraints) {
                           return Container(
-                            padding: EdgeInsets.symmetric(
+                            padding: const EdgeInsets.symmetric(
                               horizontal: 10,
                               vertical: 12,
                             ),
@@ -738,7 +767,7 @@ class _PesananBaruPageState extends State<PesananBaruPage>
                               color: Colors.white,
                               border: Border(
                                 top: BorderSide(
-                                  color: Colors.grey.withOpacity(0.2),
+                                  color: Colors.grey.withValues(alpha: 0.2),
                                   width: 1,
                                 ),
                               ),
@@ -787,26 +816,17 @@ class _PesananBaruPageState extends State<PesananBaruPage>
                                       );
                                     }
                                   } else {
-                                    // showDialog(
-                                    //   context: context,
-                                    //   builder: (context) => const ModalHandling(
-                                    //     type: 'warning',
-                                    //     title: 'Perhatian',
-                                    //     description:
-                                    //         'Shift belum dimulai. Mulai shift terlebih dahulu.',
-                                    //   ),
-                                    // );
                                     SnackbarUtil.show(
                                       context,
                                       title: "Mulai Shift terlebih dahulu",
                                       message:
                                           "Shift belum dimulai. Mulai shift terlebih dahulu.",
-                                      status: SnackBarStatus.error,
+                                      status: SnackBarStatus.warning,
                                     );
                                   }
                                 },
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.amber,
+                                  backgroundColor: AppColors.primary,
                                   foregroundColor: Colors.black87,
                                   elevation: 0, // Flat design lebih modern
                                   shape: RoundedRectangleBorder(
@@ -821,12 +841,14 @@ class _PesananBaruPageState extends State<PesananBaruPage>
                                     Icon(
                                       Icons.shopping_cart_checkout_outlined,
                                       size: 20,
+                                      color: Colors.white,
                                     ),
                                     SizedBox(width: 12),
                                     Text(
                                       'Proses Pembayaran',
                                       style: TextStyle(
                                         fontSize: 16,
+                                        color: Colors.white,
                                         fontWeight: FontWeight.bold,
                                       ),
                                     ),
@@ -1044,7 +1066,7 @@ class _PesananBaruPageState extends State<PesananBaruPage>
         if (searchController.text.isNotEmpty)
           IconButton(
             icon: const Icon(Icons.close, size: 20),
-            onPressed: () => searchController.clear(),
+            onPressed: searchController.clear,
           ),
       ],
     );
@@ -1061,7 +1083,7 @@ class _PesananBaruPageState extends State<PesananBaruPage>
         border: Border(left: BorderSide(color: Colors.grey.shade100)),
       ),
       child: IconButton(
-        icon: Icon(icon, color: Colors.amber[900], size: 22),
+        icon: Icon(icon, color: AppColors.primaryDarkest, size: 22),
         onPressed: onPressed,
       ),
     );
@@ -1080,13 +1102,13 @@ class _PesananBaruPageState extends State<PesananBaruPage>
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: Colors.amber.withOpacity(0.1),
+                color: AppColors.primary.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
               child: const Icon(
                 Icons.shopping_basket_outlined,
                 size: 50,
-                color: Colors.amber,
+                color: AppColors.primary,
               ),
             ),
             const SizedBox(height: 24),

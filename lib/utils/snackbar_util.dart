@@ -19,8 +19,7 @@ class SnackbarUtil {
         icon = Icons.check_circle_rounded;
         break;
       case SnackBarStatus.error:
-        backgroundColor =
-            Colors.red.shade900;
+        backgroundColor = Colors.red.shade900;
         icon = Icons.error_outline_rounded;
         break;
       case SnackBarStatus.warning:
@@ -28,16 +27,17 @@ class SnackbarUtil {
         icon = Icons.warning_amber_rounded;
         break;
       case SnackBarStatus.info:
-      default:
         backgroundColor = Colors.blueGrey.shade800;
         icon = Icons.info_outline_rounded;
     }
 
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+
     // 2. Hapus snackbar yang sedang tampil agar tidak menumpuk (Snap Response)
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    scaffoldMessenger.hideCurrentSnackBar();
 
     // 3. Tampilkan SnackBar dengan desain modern & floating
-    ScaffoldMessenger.of(context).showSnackBar(
+    scaffoldMessenger.showSnackBar(
       SnackBar(
         elevation: 4,
         behavior: SnackBarBehavior.floating,
@@ -88,12 +88,13 @@ class SnackbarUtil {
 
             // Tombol Close (Opsional namun membantu UX)
             const SizedBox(width: 8),
+            
             InkWell(
-              onTap: () => ScaffoldMessenger.of(context).hideCurrentSnackBar(),
+              onTap: scaffoldMessenger.hideCurrentSnackBar,
               child: Container(
                 padding: const EdgeInsets.all(4),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.1),
+                  color: Colors.white.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(Icons.close, color: Colors.white, size: 16),

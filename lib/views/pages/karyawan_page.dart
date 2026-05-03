@@ -23,20 +23,20 @@ class _KaryawanPageState extends State<KaryawanPage> {
         Expanded(
           flex: 1,
           child: Container(
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               border: Border(right: BorderSide(color: Colors.black26)),
             ),
             child: Column(
               children: [
                 Container(
-                  padding: EdgeInsets.symmetric(horizontal: 12.0),
-                  decoration: BoxDecoration(
+                  padding: const EdgeInsets.symmetric(horizontal: 12.0),
+                  decoration: const BoxDecoration(
                     border: Border(bottom: BorderSide(color: Colors.black26)),
                   ),
-                  child: TextField(
+                  child: const TextField(
                     // controller: searchController,
                     autofocus: true,
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       icon: Icon(Icons.search),
                       hintText: 'Cari Karyawan...',
                       border: InputBorder.none,
@@ -57,7 +57,7 @@ class _KaryawanPageState extends State<KaryawanPage> {
                       },
                       child: Container(
                         color: Colors.white,
-                        padding: EdgeInsets.all(14.0),
+                        padding: const EdgeInsets.all(14.0),
                         child: Row(
                           spacing: 16.0,
                           children: [
@@ -74,20 +74,20 @@ class _KaryawanPageState extends State<KaryawanPage> {
                                   begin: Alignment.topLeft,
                                   end: Alignment.bottomRight,
                                 ),
-                                borderRadius: BorderRadius.all(
+                                borderRadius: const BorderRadius.all(
                                   Radius.circular(20.0),
                                 ),
                               ),
-                              padding: EdgeInsets.all(18.0),
+                              padding: const EdgeInsets.all(18.0),
                               child: Text(
                                 getInitials('Amanda'),
-                                style: TextStyle(
+                                style: const TextStyle(
                                   fontWeight: FontWeight.w900,
                                   fontSize: 25.0,
                                 ),
                               ),
                             ),
-                            Column(
+                            const Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
@@ -115,7 +115,7 @@ class _KaryawanPageState extends State<KaryawanPage> {
                       },
                       child: Container(
                         color: Colors.amber[100],
-                        padding: EdgeInsets.all(14.0),
+                        padding: const EdgeInsets.all(14.0),
                         child: Row(
                           spacing: 16.0,
                           children: [
@@ -132,20 +132,20 @@ class _KaryawanPageState extends State<KaryawanPage> {
                                   begin: Alignment.topLeft,
                                   end: Alignment.bottomRight,
                                 ),
-                                borderRadius: BorderRadius.all(
+                                borderRadius: const BorderRadius.all(
                                   Radius.circular(20.0),
                                 ),
                               ),
-                              padding: EdgeInsets.all(18.0),
+                              padding: const EdgeInsets.all(18.0),
                               child: Text(
                                 getInitials('Ria Ricis'),
-                                style: TextStyle(
+                                style: const TextStyle(
                                   fontWeight: FontWeight.w900,
                                   fontSize: 25.0,
                                 ),
                               ),
                             ),
-                            Column(
+                            const Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
@@ -178,7 +178,7 @@ class _KaryawanPageState extends State<KaryawanPage> {
             children: [
               Container(
                 color: Colors.grey[200],
-                padding: EdgeInsets.all(16.0),
+                padding: const EdgeInsets.all(16.0),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -198,20 +198,20 @@ class _KaryawanPageState extends State<KaryawanPage> {
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
                             ),
-                            borderRadius: BorderRadius.all(
+                            borderRadius: const BorderRadius.all(
                               Radius.circular(20.0),
                             ),
                           ),
-                          padding: EdgeInsets.all(18.0),
+                          padding: const EdgeInsets.all(18.0),
                           child: Text(
                             getInitials('Ria Ricis'),
-                            style: TextStyle(
+                            style: const TextStyle(
                               fontWeight: FontWeight.w900,
                               fontSize: 25.0,
                             ),
                           ),
                         ),
-                        Column(
+                        const Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
@@ -229,12 +229,12 @@ class _KaryawanPageState extends State<KaryawanPage> {
                         ),
                       ],
                     ),
-                    Row(spacing: 20.0, children: [Icon(Icons.more_vert)]),
+                    const Row(spacing: 20.0, children: [Icon(Icons.more_vert)]),
                   ],
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.all(20.0),
+              const Padding(
+                padding: EdgeInsets.all(20.0),
                 child: Column(
                   spacing: 20.0,
                   crossAxisAlignment: CrossAxisAlignment.start,
