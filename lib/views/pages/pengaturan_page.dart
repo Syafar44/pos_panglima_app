@@ -1,19 +1,21 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:device_info_plus/device_info_plus.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:pos_panglima_app/utils/crash_reporter.dart';
 import 'package:flutter/material.dart';
 import 'package:network_info_plus/network_info_plus.dart';
 import 'package:pos_panglima_app/data/app_config.dart';
 import 'package:pos_panglima_app/services/auth_service.dart';
 import 'package:pos_panglima_app/services/bluetooth_printer_service.dart';
 import 'package:blue_thermal_printer/blue_thermal_printer.dart';
+import 'package:bluetooth_enable_fork/bluetooth_enable_fork.dart';
 import 'package:pos_panglima_app/services/helper/dio_client.dart';
 import 'package:pos_panglima_app/services/storage/error_log_manager.dart';
-import 'package:pos_panglima_app/utils/loader_utils.dart';
-import 'package:pos_panglima_app/utils/modal_handling.dart';
+import 'package:pos_panglima_app/utils/app_colors.dart';
 import 'package:pos_panglima_app/utils/snackbar_util.dart';
-import 'package:pos_panglima_app/views/widgets/endShift_modal.dart';
+import 'package:pos_panglima_app/views/widgets/end_shift_modal.dart';
 
 class PengaturanPage extends StatefulWidget {
   const PengaturanPage({super.key});
@@ -33,12 +35,8 @@ class _PengaturanPageState extends State<PengaturanPage> {
   Map<String, dynamic>? profile;
   bool isLoadingProfile = true;
 
-  final List<String> _allowedKeywords = [
-    'rpp',
-    // tambahkan keyword lain di sini sewaktu-waktu
-    // 'epson',
-    // 'xprinter',
-  ];
+  final List<String> _allowedKeywords = ['rpp', 'eps', 'xpr', 'printer'];
+  int _versionTapCount = 0;
 
   @override
   void initState() {
@@ -46,18 +44,130 @@ class _PengaturanPageState extends State<PengaturanPage> {
     authService = AuthService(apiClient.dio);
     getProfile();
 
-    _bluetoothSubscription = BluetoothPrinterService.bluetooth.onStateChanged().listen((state) {
-      setState(() {
-        connectedPrinter = BluetoothPrinterService.connectedPrinter;
-      });
-    });
+    _bluetoothSubscription = BluetoothPrinterService.bluetooth
+        .onStateChanged()
+        .listen((state) {
+          setState(() {
+            connectedPrinter = BluetoothPrinterService.connectedPrinter;
+          });
+        });
 
     scanDevices().then((_) {
       BluetoothPrinterService.loadLastPrinter();
     });
   }
 
+  Future<bool> _ensureBluetoothOn() async {
+    final isOn = await BluetoothPrinterService.bluetooth.isOn ?? false;
+    if (isOn) return true;
+    if (!mounted) return false;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        icon: const Icon(
+          Icons.bluetooth_disabled_rounded,
+          size: 48,
+          color: AppColors.primary,
+        ),
+        title: const Text(
+          'Aktifkan Bluetooth?',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: Colors.black87,
+          ),
+        ),
+        content: const Text(
+          'Bluetooth perangkat sedang nonaktif. Aktifkan sekarang untuk '
+          'mencari atau menyambungkan printer?',
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 14, color: Colors.black54, height: 1.5),
+        ),
+        actionsPadding: const EdgeInsets.only(
+          bottom: 20,
+          left: 20,
+          right: 20,
+          top: 4,
+        ),
+        actions: [
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    side: BorderSide(color: Colors.grey.shade300),
+                  ),
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text(
+                    'Tidak',
+                    style: TextStyle(
+                      color: Colors.black87,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: const Text(
+                    'Aktifkan',
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return false;
+
+    try {
+      final result = await BluetoothEnable.enableBluetooth;
+      if (result == 'true') {
+        await Future.delayed(const Duration(milliseconds: 500));
+        return (await BluetoothPrinterService.bluetooth.isOn) ?? false;
+      }
+    } catch (e, stack) {
+      CrashReporter.report(
+        e,
+        stack,
+        reason: 'pengaturan_page._ensureBluetoothOn',
+      );
+    }
+
+    if (mounted) {
+      SnackbarUtil.show(
+        context,
+        title: 'Bluetooth tidak aktif',
+        message: 'Aktivasi dibatalkan. Silakan coba kembali.',
+        status: SnackBarStatus.warning,
+      );
+    }
+    return false;
+  }
+
   Future<void> scanDevices() async {
+    if (!await _ensureBluetoothOn()) return;
     setState(() => isScanning = true);
     final foundDevices = await BluetoothPrinterService.scanPrinters();
     setState(() {
@@ -67,6 +177,7 @@ class _PengaturanPageState extends State<PengaturanPage> {
   }
 
   Future<void> connectPrinter(BluetoothDevice device) async {
+    if (!await _ensureBluetoothOn()) return;
     bool ok = await BluetoothPrinterService.connect(device);
 
     if (!mounted) return;
@@ -113,27 +224,22 @@ class _PengaturanPageState extends State<PengaturanPage> {
     try {
       final response = await authService.getProfile();
 
-      debugPrint("PROFILE RESPONSE: ${response.data}");
-
       if (!mounted) return;
       setState(() {
         profile = response.data['data'];
         isLoadingProfile = false;
       });
-    } catch (e) {
+    } catch (e, stack) {
+      CrashReporter.report(e, stack, reason: 'pengaturan_page.getProfile');
       if (!mounted) return;
       isLoadingProfile = false;
       debugPrint("Gagal ambil profile: $e");
-      showDialog(
-        context: context,
-        builder: (context) {
-          return ModalHandling(
-            type: 'danger',
-            title: 'Gagal memuat data pengguna',
-            description:
-                'Terjadi kendala saat mengambil data pengguna. Mohon periksa koneksi atau coba kembali.',
-          );
-        },
+      SnackbarUtil.show(
+        context,
+        title: "Gagal memuat data pengguna",
+        message:
+            "Terjadi kendala saat mengambil data pengguna. Mohon periksa koneksi atau coba kembali.",
+        status: SnackBarStatus.error,
       );
     }
   }
@@ -201,12 +307,21 @@ class _PengaturanPageState extends State<PengaturanPage> {
                         endIndent: 20,
                       ),
                       const SizedBox(height: 10),
-                      Text(
-                        'V.${AppConfig.version}',
-                        style: TextStyle(
-                          color: Colors.grey[400],
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
+                      GestureDetector(
+                        onTap: () {
+                          setState(() => _versionTapCount++);
+                          if (_versionTapCount >= 7) {
+                            _versionTapCount = 0;
+                            FirebaseCrashlytics.instance.crash();
+                          }
+                        },
+                        child: Text(
+                          'V.${AppConfig.version}',
+                          style: TextStyle(
+                            color: Colors.grey[400],
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                     ],
@@ -224,7 +339,7 @@ class _PengaturanPageState extends State<PengaturanPage> {
               ? printer()
               : numberPage == 3
               ? errorLog()
-              : Center(child: Text('Comming Soon')),
+              : const Center(child: Text('Comming Soon')),
         ),
       ],
     );
@@ -235,7 +350,7 @@ class _PengaturanPageState extends State<PengaturanPage> {
       children: [
         Expanded(
           child: SingleChildScrollView(
-            padding: EdgeInsets.symmetric(vertical: 10.0),
+            padding: const EdgeInsets.symmetric(vertical: 10.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -252,7 +367,7 @@ class _PengaturanPageState extends State<PengaturanPage> {
                   subtitle: profile?['department'] ?? '-',
                 ),
 
-                SizedBox(height: 20), // Memberi jarak antar section
+                const SizedBox(height: 20), // Memberi jarak antar section
                 // --- SECTION 2: INFORMASI PERANGKAT ---
                 _buildSectionHeader('Informasi Perangkat'),
                 _buildProfileTile(
@@ -293,7 +408,7 @@ class _PengaturanPageState extends State<PengaturanPage> {
 
         // --- TOMBOL KELUAR ---
         Container(
-          padding: EdgeInsets.all(20.0),
+          padding: const EdgeInsets.all(20.0),
           decoration: BoxDecoration(
             color: Colors.white,
             border: Border(top: BorderSide(color: Colors.grey[200]!)),
@@ -306,7 +421,7 @@ class _PengaturanPageState extends State<PengaturanPage> {
                 showDialog(
                   context: context,
                   barrierDismissible: true,
-                  builder: (BuildContext context) => EndShiftModal(),
+                  builder: (BuildContext context) => const EndShiftModal(),
                 );
               },
               icon: Icon(Icons.logout, color: Colors.red[700], size: 20),
@@ -334,13 +449,13 @@ class _PengaturanPageState extends State<PengaturanPage> {
   // Helper untuk Header Section agar konsisten
   Widget _buildSectionHeader(String title) {
     return Padding(
-      padding: EdgeInsets.fromLTRB(20, 10, 20, 10),
+      padding: const EdgeInsets.fromLTRB(20, 10, 20, 10),
       child: Text(
         title.toUpperCase(),
-        style: TextStyle(
+        style: const TextStyle(
           fontSize: 12.0,
           fontWeight: FontWeight.bold,
-          color: Colors.amber[900],
+          color: AppColors.primary,
           letterSpacing: 1.1,
         ),
       ),
@@ -355,16 +470,16 @@ class _PengaturanPageState extends State<PengaturanPage> {
   }) {
     return ListTile(
       leading: Container(
-        padding: EdgeInsets.all(8),
+        padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: Colors.grey[100],
+          color: AppColors.primary,
           borderRadius: BorderRadius.circular(8),
         ),
-        child: Icon(icon, color: Colors.grey[700], size: 20),
+        child: Icon(icon, color: Colors.white, size: 20),
       ),
       title: Text(
         title,
-        style: TextStyle(
+        style: const TextStyle(
           fontSize: 14,
           fontWeight: FontWeight.w500,
           color: Colors.black87,
@@ -376,7 +491,7 @@ class _PengaturanPageState extends State<PengaturanPage> {
               subtitle,
               style: TextStyle(color: Colors.grey[600], fontSize: 14),
             ),
-      contentPadding: EdgeInsets.symmetric(horizontal: 20),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 20),
     );
   }
 
@@ -409,18 +524,7 @@ class _PengaturanPageState extends State<PengaturanPage> {
                   ),
                 ],
               ),
-              // Tombol refresh/stop scanning yang lebih kecil di pojok
-              if (isScanning)
-                SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: ModernLoading(
-                    timeout: const Duration(seconds: 10),
-                    onRetry: () {},
-                  ),
-                )
-              else
-                Icon(Icons.print_rounded, color: Colors.amber[800]),
+              const Icon(Icons.print_rounded, color: AppColors.primary),
             ],
           ),
         ),
@@ -454,7 +558,9 @@ class _PengaturanPageState extends State<PengaturanPage> {
                                   border: Border.all(color: Colors.grey[200]!),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Colors.black.withOpacity(0.02),
+                                      color: Colors.black.withValues(
+                                        alpha: 0.02,
+                                      ),
                                       blurRadius: 10,
                                       offset: const Offset(0, 4),
                                     ),
@@ -466,10 +572,10 @@ class _PengaturanPageState extends State<PengaturanPage> {
                                     vertical: 4,
                                   ),
                                   leading: CircleAvatar(
-                                    backgroundColor: Colors.amber[50],
-                                    child: Icon(
+                                    backgroundColor: Colors.grey[200],
+                                    child: const Icon(
                                       Icons.bluetooth,
-                                      color: Colors.amber[800],
+                                      color: AppColors.primary,
                                       size: 20,
                                     ),
                                   ),
@@ -511,14 +617,14 @@ class _PengaturanPageState extends State<PengaturanPage> {
             width: double.infinity,
             height: 50,
             child: ElevatedButton.icon(
-              onPressed: isScanning ? null : () => scanDevices(),
+              onPressed: isScanning ? null : scanDevices,
               icon: isScanning
-                  ? SizedBox(
+                  ? const SizedBox(
                       width: 18,
                       height: 18,
-                      child: ModernLoading(
-                        timeout: const Duration(seconds: 10),
-                        onRetry: () {},
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                       ),
                     )
                   : const Icon(Icons.search_rounded),
@@ -532,8 +638,8 @@ class _PengaturanPageState extends State<PengaturanPage> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: isScanning
                     ? Colors.grey[200]
-                    : Colors.amber[400],
-                foregroundColor: Colors.black87,
+                    : AppColors.primary,
+                foregroundColor: Colors.white,
                 elevation: 0,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -555,7 +661,7 @@ class _PengaturanPageState extends State<PengaturanPage> {
             "Fitur Error Log sedang dalam pengembangan",
             style: TextStyle(fontSize: 16, color: Colors.grey[500]),
           ),
-          SizedBox(height: 20),
+          const SizedBox(height: 20),
           ElevatedButton(
             onPressed: () async {
               await ErrorLogManager.saveLog(
@@ -563,27 +669,27 @@ class _PengaturanPageState extends State<PengaturanPage> {
                 description: 'Ini adalah deskripsi error untuk pengujian 1',
               );
             },
-            child: Text("Save Error"),
+            child: const Text("Save Error"),
           ),
           ElevatedButton(
             onPressed: () async {
               final logs = await ErrorLogManager.getLogs();
               debugPrint(logs.toString());
             },
-            child: Text("Print Error"),
+            child: const Text("Print Error"),
           ),
           ElevatedButton(
             onPressed: () async {
               await ErrorLogManager.clearLogs();
             },
-            child: Text("Clear Error"),
+            child: const Text("Clear Error"),
           ),
           ElevatedButton(
             onPressed: () async {
               final fcmToken = await FirebaseMessaging.instance.getToken();
               debugPrint("FCM Token: $fcmToken");
             },
-            child: Text("Print FCM Token"),
+            child: const Text("Print FCM Token"),
           ),
         ],
       ),
@@ -628,7 +734,7 @@ class _PengaturanPageState extends State<PengaturanPage> {
     bool isActive = numberPage == index;
 
     return Material(
-      color: isActive ? Colors.amber[50] : Colors.white,
+      color: isActive ? AppColors.primary : Colors.white,
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
         onTap: () {
@@ -642,7 +748,7 @@ class _PengaturanPageState extends State<PengaturanPage> {
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
               width: isActive ? 2 : 1,
-              color: isActive ? Colors.orange : Colors.grey.shade200,
+              color: isActive ? AppColors.primaryDark : Colors.grey.shade500,
             ),
           ),
           child: Row(
@@ -650,14 +756,14 @@ class _PengaturanPageState extends State<PengaturanPage> {
               Icon(
                 icon,
                 size: 24.0,
-                color: isActive ? Colors.amber[800] : Colors.grey[500],
+                color: isActive ? AppColors.white : Colors.grey[500],
               ),
               const SizedBox(width: 16.0),
               Text(
                 label,
                 style: TextStyle(
                   fontSize: 15.0,
-                  color: isActive ? Colors.amber[900] : Colors.grey[700],
+                  color: isActive ? Colors.white : Colors.grey[700],
                   fontWeight: isActive ? FontWeight.bold : FontWeight.w500,
                 ),
               ),
@@ -667,7 +773,7 @@ class _PengaturanPageState extends State<PengaturanPage> {
                   width: 4,
                   height: 20,
                   decoration: BoxDecoration(
-                    color: Colors.amber[800],
+                    color: AppColors.primaryDark,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),

@@ -1,20 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:pos_panglima_app/utils/app_colors.dart';
 import 'package:pos_panglima_app/data/app_config.dart';
 import 'package:pos_panglima_app/data/notifiers.dart';
 import 'package:pos_panglima_app/services/storage/shift_storage_service.dart';
 import 'package:pos_panglima_app/views/pages/login_page.dart';
-import 'package:pos_panglima_app/views/widgets/endShift_modal.dart';
+import 'package:pos_panglima_app/views/widgets/end_shift_modal.dart';
+import 'package:pos_panglima_app/views/widgets/log_viewer_sheet.dart';
 import 'package:pos_panglima_app/views/widgets_tree.dart';
 
 List<Map<String, dynamic>> list = [
-  {'label': 'Pesanan Baru', 'icon': Icon(Icons.shopping_cart)},
+  {'label': 'Pesanan Baru', 'icon': const Icon(Icons.shopping_cart)},
   // {'label': 'Open Bill', 'icon': Icon(Icons.receipt_sharp)},
-  {'label': 'Riwayat Penjualan', 'icon': Icon(Icons.history)},
+  {'label': 'Riwayat Penjualan', 'icon': const Icon(Icons.history)},
   // {'label': 'Pelanggan', 'icon': Icon(Icons.person)},
   // {'label': 'Karyawan', 'icon': Icon(Icons.group)},
-  {'label': 'Laporan', 'icon': Icon(Icons.receipt_long)},
-  {'label': 'Inventory', 'icon': Icon(Icons.inventory)},
-  {'label': 'Pengaturan', 'icon': Icon(Icons.settings)},
+  {'label': 'Laporan', 'icon': const Icon(Icons.receipt_long)},
+  {'label': 'Inventory', 'icon': const Icon(Icons.inventory)},
+  {'label': 'Pengaturan', 'icon': const Icon(Icons.settings)},
 ];
 
 class DrawerWidget extends StatefulWidget {
@@ -30,6 +32,7 @@ class _DrawerWidgetState extends State<DrawerWidget>
     with TickerProviderStateMixin {
   late AnimationController _controller;
   bool? hasShift;
+  int _logTapCount = 0;
 
   @override
   void initState() {
@@ -38,9 +41,7 @@ class _DrawerWidgetState extends State<DrawerWidget>
       duration: const Duration(seconds: 1),
       vsync: this,
     );
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      precacheImage(const AssetImage('assets/images/logo.png'), context);
-    });
+    // precacheImage dipindahkan ke SplashScreen agar hanya dieksekusi sekali
     _loadShiftStatus();
   }
 
@@ -83,32 +84,44 @@ class _DrawerWidgetState extends State<DrawerWidget>
             width: double.infinity,
             padding: const EdgeInsets.only(left: 20, right: 20),
             decoration: BoxDecoration(
-              color: Colors.amber[50], // Background lembut untuk header
+              gradient: LinearGradient(
+                colors: [AppColors.accent, AppColors.accentDark],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ), // Background lembut untuk header
               border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
             ),
             child: Row(
               children: [
                 // Logo dengan Frame Cantik
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
-                        blurRadius: 10,
+                GestureDetector(
+                  onTap: () {
+                    _logTapCount++;
+                    if (_logTapCount >= 7) {
+                      _logTapCount = 0;
+                      showLogViewer(context);
+                    }
+                  },
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.05),
+                          blurRadius: 10,
+                        ),
+                      ],
+                    ),
+                    child: Image.asset(
+                      'assets/images/icon_launcher.png',
+                      width: 50,
+                      height: 50,
+                      errorBuilder: (context, error, stackTrace) => const Icon(
+                        Icons.storefront,
+                        size: 40,
+                        color: AppColors.primary,
                       ),
-                    ],
-                  ),
-                  child: Image.asset(
-                    'assets/images/logo.png',
-                    width: 50,
-                    height: 50,
-                    errorBuilder: (context, error, stackTrace) => const Icon(
-                      Icons.storefront,
-                      size: 40,
-                      color: Colors.amber,
                     ),
                   ),
                 ),
@@ -180,7 +193,7 @@ class _DrawerWidgetState extends State<DrawerWidget>
                   margin: const EdgeInsets.only(bottom: 4),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(12),
-                    color: isSelected ? Colors.amber[100] : Colors.white,
+                    color: isSelected ? AppColors.primary : Colors.white,
                   ),
                   child: ListTile(
                     shape: RoundedRectangleBorder(
@@ -191,15 +204,13 @@ class _DrawerWidgetState extends State<DrawerWidget>
                       list[index]['icon'] is Icon
                           ? (list[index]['icon'] as Icon).icon
                           : Icons.circle,
-                      color: isSelected ? Colors.amber[900] : Colors.grey[600],
+                      color: isSelected ? AppColors.white : Colors.grey[600],
                     ),
                     title: Text(
                       list[index]['label'],
                       style: TextStyle(
                         fontSize: 15,
-                        color: isSelected
-                            ? Colors.amber[900]
-                            : Colors.grey[800],
+                        color: isSelected ? AppColors.white : Colors.grey[800],
                         fontWeight: isSelected
                             ? FontWeight.bold
                             : FontWeight.w500,
@@ -245,7 +256,7 @@ class _DrawerWidgetState extends State<DrawerWidget>
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => LoginPage(title: 'Login'),
+                        builder: (context) => const LoginPage(title: 'Login'),
                       ),
                     );
                   } else {

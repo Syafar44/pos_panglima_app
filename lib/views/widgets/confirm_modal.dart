@@ -1,105 +1,5 @@
-// import 'package:flutter/material.dart';
-
-// class ConfirmModal extends StatefulWidget {
-//   const ConfirmModal({
-//     super.key,
-//     required this.title,
-//     required this.description,
-//   });
-
-//   final String title;
-//   final String description;
-
-//   @override
-//   State<ConfirmModal> createState() => _ConfirmModalState();
-// }
-
-// class _ConfirmModalState extends State<ConfirmModal> {
-//   @override
-//   Widget build(BuildContext context) {
-//     return Dialog(
-//       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-//       insetPadding: EdgeInsets.all(16),
-//       child: Container(
-//         width: 400.0,
-//         height: 300.0,
-//         decoration: BoxDecoration(
-//           color: Colors.white,
-//           borderRadius: BorderRadius.all(Radius.circular(20.0)),
-//         ),
-//         child: Padding(
-//           padding: const EdgeInsets.all(20.0),
-//           child: Column(
-//             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-//             children: [
-//               Column(
-//                 children: [
-//                   Text(
-//                     widget.title,
-//                     style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-//                   ),
-//                   SizedBox(height: 20),
-//                   Text(widget.description, style: TextStyle(fontSize: 16)),
-//                 ],
-//               ),
-//               Row(
-//                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
-//                 children: [
-//                   Expanded(
-//                     child: FilledButton(
-//                       style: FilledButton.styleFrom(
-//                         minimumSize: Size(double.infinity, 40.0),
-//                         backgroundColor: Colors.grey,
-//                         shape: RoundedRectangleBorder(
-//                           borderRadius: BorderRadius.circular(14.0),
-//                         ),
-//                       ),
-//                       onPressed: () {
-//                         Navigator.pop(context, false);
-//                       },
-//                       child: Text(
-//                         'Batal',
-//                         style: TextStyle(
-//                           fontWeight: FontWeight.bold,
-//                           color: Colors.white,
-//                           fontSize: 16,
-//                         ),
-//                       ),
-//                     ),
-//                   ),
-//                   SizedBox(width: 10),
-//                   Expanded(
-//                     child: FilledButton(
-//                       style: FilledButton.styleFrom(
-//                         minimumSize: Size(double.infinity, 40.0),
-//                         backgroundColor: Colors.amber,
-//                         shape: RoundedRectangleBorder(
-//                           borderRadius: BorderRadius.circular(14.0),
-//                         ),
-//                       ),
-//                       onPressed: () {
-//                         Navigator.pop(context, true);
-//                       },
-//                       child: Text(
-//                         'OK',
-//                         style: TextStyle(
-//                           fontWeight: FontWeight.bold,
-//                           color: Colors.black,
-//                           fontSize: 16,
-//                         ),
-//                       ),
-//                     ),
-//                   ),
-//                 ],
-//               ),
-//             ],
-//           ),
-//         ),
-//       ),
-//     );
-//   }
-// }
 import 'package:flutter/material.dart';
+import 'package:pos_panglima_app/utils/app_colors.dart';
 
 class ConfirmModal extends StatelessWidget {
   const ConfirmModal({
@@ -136,14 +36,14 @@ class ConfirmModal extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: isDanger ? Colors.red.shade50 : Colors.amber.shade50,
+                color: isDanger ? Colors.red.shade50 : AppColors.primaryLight,
                 shape: BoxShape.circle,
               ),
               child: Icon(
                 isDanger
                     ? Icons.warning_amber_rounded
                     : Icons.help_outline_rounded,
-                color: isDanger ? Colors.red : Colors.amber.shade900,
+                color: isDanger ? Colors.red : AppColors.primaryDarkest,
                 size: 40,
               ),
             ),
@@ -202,8 +102,10 @@ class ConfirmModal extends StatelessWidget {
                   child: ElevatedButton(
                     onPressed: () => Navigator.pop(context, true),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: isDanger ? Colors.red : Colors.amber,
-                      foregroundColor: isDanger ? Colors.white : Colors.black87,
+                      backgroundColor: isDanger
+                          ? Colors.red
+                          : AppColors.primary,
+                      foregroundColor: isDanger ? Colors.white : Colors.white,
                       elevation: 0,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(

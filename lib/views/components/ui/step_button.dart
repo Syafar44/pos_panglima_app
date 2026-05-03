@@ -5,6 +5,7 @@ class StepButton extends StatelessWidget {
     super.key,
     required this.icon,
     required this.color,
+    this.iconColor,
     required this.onTap,
     required this.onLongPressStart,
     required this.onLongPressEnd,
@@ -12,6 +13,7 @@ class StepButton extends StatelessWidget {
 
   final IconData icon;
   final Color color;
+  final Color? iconColor;
   final VoidCallback onTap;
   final VoidCallback onLongPressStart;
   final VoidCallback onLongPressEnd;
@@ -30,7 +32,7 @@ class StepButton extends StatelessWidget {
           minimumSize: const Size(45, 45),
         ),
         onPressed: onTap,
-        icon: Icon(icon, size: 22, color: Colors.black87),
+        icon: Icon(icon, size: 22, color: iconColor ?? Colors.black87),
       ),
     );
   }

@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:pos_panglima_app/utils/app_colors.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:pos_panglima_app/services/auth_service.dart';
@@ -7,12 +8,14 @@ import 'package:pos_panglima_app/services/helper/dio_client.dart';
 import 'package:pos_panglima_app/services/shift_service.dart';
 import 'package:pos_panglima_app/services/storage/shift_storage_service.dart';
 import 'package:pos_panglima_app/utils/convert.dart';
+import 'package:pos_panglima_app/utils/crash_reporter.dart';
 import 'package:pos_panglima_app/utils/loader_utils.dart';
 import 'package:pos_panglima_app/utils/modal_handling.dart';
 import 'package:pos_panglima_app/utils/rupiah_formatter.dart';
 import 'package:pos_panglima_app/utils/snackbar_util.dart';
 import 'package:pos_panglima_app/views/widgets_tree.dart';
 import 'package:intl/date_symbol_data_local.dart';
+
 class StartShiftModal extends StatefulWidget {
   const StartShiftModal({super.key});
 
@@ -44,8 +47,6 @@ class _StartShiftModalState extends State<StartShiftModal> {
   Future<void> getProfile() async {
     try {
       final response = await authService.getProfile();
-
-      debugPrint("PROFILE RESPONSE: ${response.data}");
       final data = response.data['data'];
 
       if (!mounted) return;
@@ -56,7 +57,17 @@ class _StartShiftModalState extends State<StartShiftModal> {
             : 0;
         isLoadingProfile = false;
       });
-    } on DioException catch (e) {
+    } on DioException catch (e, stack) {
+      CrashReporter.report(
+        e,
+        stack,
+        reason: 'startShift_modal.getProfile',
+        context: {
+          'endpoint': e.requestOptions.path,
+          'statusCode': e.response?.statusCode,
+          'responseData': e.response?.data?.toString(),
+        },
+      );
       if (!mounted) return;
       isLoadingProfile = false;
       debugPrint('error shift: ${e.response}');
@@ -116,14 +127,15 @@ class _StartShiftModalState extends State<StartShiftModal> {
 
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => WidgetTree()),
+        MaterialPageRoute(builder: (_) => const WidgetTree()),
       );
-    } catch (e) {
+    } catch (e, stack) {
+      CrashReporter.report(e, stack, reason: 'startShift_modal.startShift');
       if (!mounted) return;
       showDialog(
         context: context,
         builder: (context) {
-          return ModalHandling(
+          return const ModalHandling(
             type: 'warning',
             title: 'Jadwal Shift Sudah diambil',
             description:
@@ -135,17 +147,21 @@ class _StartShiftModalState extends State<StartShiftModal> {
   }
 
   Color getShiftColor(String? shift) {
-    if (shift == null) return Colors.grey;
+    if (shift == null) {
+      return Colors.grey;
+    }
     final s = shift.toLowerCase();
-    if (s.contains('pagi'))
+    if (s.contains('pagi')) {
       return const Color.fromARGB(255, 96, 220, 255); // Maron untuk Pagi
-    if (s.contains('siang') || s.contains('sore'))
+    }
+    if (s.contains('siang') || s.contains('sore')) {
       return const Color.fromARGB(
         255,
         255,
         132,
         0,
       ); // Orange/Amber gelap untuk Siang
+    }
     return Colors.blueGrey; // Warna default jika ada shift lain
   }
 
@@ -175,7 +191,7 @@ class _StartShiftModalState extends State<StartShiftModal> {
                       decoration: BoxDecoration(
                         color: const Color(
                           0xFF800000,
-                        ).withOpacity(0.1), // Maron transparan
+                        ).withValues(alpha: 0.1), // Maron transparan
                         shape: BoxShape.circle,
                       ),
                       child: const Icon(
@@ -205,12 +221,12 @@ class _StartShiftModalState extends State<StartShiftModal> {
                       width: double.infinity,
                       padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
-                        color: themeColor.withOpacity(
-                          0.05,
+                        color: themeColor.withValues(
+                          alpha: 0.05,
                         ), // Background tipis sesuai warna shift
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(
-                          color: themeColor.withOpacity(0.3),
+                          color: themeColor.withValues(alpha: 0.3),
                           width: 2,
                         ), // Border lebih tebal agar terlihat
                       ),
@@ -222,7 +238,7 @@ class _StartShiftModalState extends State<StartShiftModal> {
                               fontSize: 12,
                               letterSpacing: 1.2,
                               fontWeight: FontWeight.bold,
-                              color: themeColor.withOpacity(0.8),
+                              color: themeColor.withValues(alpha: 0.8),
                             ),
                           ),
                           const SizedBox(height: 8),
@@ -236,7 +252,7 @@ class _StartShiftModalState extends State<StartShiftModal> {
                             ),
                           ),
                           const SizedBox(height: 12),
-                          Divider(color: themeColor.withOpacity(0.2)),
+                          Divider(color: themeColor.withValues(alpha: 0.2)),
                           const SizedBox(height: 12),
 
                           // Detail Waktu
@@ -259,21 +275,21 @@ class _StartShiftModalState extends State<StartShiftModal> {
                     const SizedBox(height: 10),
 
                     // Footer Alert kecil
-                    Row(
+                    const Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Icon(
                           Icons.info_outline,
                           size: 16,
-                          color: Colors.amber.shade900,
+                          color: AppColors.primaryDarkest,
                         ),
-                        const SizedBox(width: 8),
+                        SizedBox(width: 8),
                         Expanded(
                           child: Text(
                             "Pastikan shift sudah sesuai sebelum memulai.",
                             style: TextStyle(
                               fontSize: 12,
-                              color: Colors.amber.shade900,
+                              color: AppColors.primaryDarkest,
                               fontStyle: FontStyle.italic,
                             ),
                           ),
@@ -312,8 +328,8 @@ class _StartShiftModalState extends State<StartShiftModal> {
                           child: ElevatedButton(
                             onPressed: () => Navigator.pop(context, true),
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.amber,
-                              foregroundColor: Colors.black87,
+                              backgroundColor: AppColors.primary,
+                              foregroundColor: Colors.white,
                               elevation: 0,
                               padding: const EdgeInsets.symmetric(vertical: 16),
                               shape: RoundedRectangleBorder(
@@ -338,6 +354,13 @@ class _StartShiftModalState extends State<StartShiftModal> {
           },
         ) ??
         false;
+  }
+
+  @override
+  void dispose() {
+    controllerSalesStart.dispose();
+    selectedShiftController.dispose();
+    super.dispose();
   }
 
   @override
@@ -421,35 +444,72 @@ class _StartShiftModalState extends State<StartShiftModal> {
                     const SizedBox(height: 20),
 
                     // Dropdown Pilih Shift
-                    DropdownButtonFormField<String>(
-                      value: selectedShift,
-                      borderRadius: BorderRadius.circular(16),
-                      style: const TextStyle(
-                        color: Colors.black,
-                        fontWeight: FontWeight.w500,
-                      ),
-                      decoration: InputDecoration(
-                        labelText: 'Pilih Shift',
-                        prefixIcon: const Icon(Icons.access_time_rounded),
-                        filled: true,
-                        fillColor: Colors.white,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: BorderSide(color: Colors.grey.shade300),
-                        ),
-                      ),
-                      items: const [
-                        DropdownMenuItem(
-                          value: 'Shift Pagi',
-                          child: Text('Shift Pagi'),
-                        ),
-                        DropdownMenuItem(
-                          value: 'Shift Siang',
-                          child: Text('Shift Siang'),
-                        ),
-                      ],
-                      onChanged: (value) =>
-                          setState(() => selectedShift = value),
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        return DropdownMenu<String>(
+                          requestFocusOnTap: false,
+                          width: constraints.maxWidth,
+                          initialSelection: selectedShift,
+                          label: const Text('Pilih Shift'),
+                          leadingIcon: const Icon(Icons.access_time_rounded),
+                          textStyle: const TextStyle(
+                            color: Colors.black,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          menuStyle: MenuStyle(
+                            backgroundColor: WidgetStateProperty.all(
+                              Colors.white,
+                            ),
+                            surfaceTintColor: WidgetStateProperty.all(
+                              Colors.white,
+                            ),
+                            fixedSize: WidgetStateProperty.all(
+                              Size(
+                                constraints.maxWidth,
+                                120,
+                              ), // Memaksa lebar popup sama dengan input
+                            ),
+                          ),
+                          inputDecorationTheme: InputDecorationTheme(
+                            filled: true,
+                            fillColor: Colors.white,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              borderSide: BorderSide(
+                                color: Colors.grey.shade300,
+                              ),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              borderSide: BorderSide(
+                                color: Colors.grey.shade300,
+                              ),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              borderSide: const BorderSide(
+                                color: AppColors.primary,
+                                width: 2,
+                              ),
+                            ),
+                          ),
+                          dropdownMenuEntries: const [
+                            DropdownMenuEntry(
+                              value: 'Shift Pagi',
+                              label: 'Shift Pagi',
+                            ),
+                            DropdownMenuEntry(
+                              value: 'Shift Siang',
+                              label: 'Shift Siang',
+                            ),
+                          ],
+                          onSelected: (value) {
+                            if (value != null) {
+                              setState(() => selectedShift = value);
+                            }
+                          },
+                        );
+                      },
                     ),
                     const SizedBox(height: 16),
 
@@ -457,6 +517,7 @@ class _StartShiftModalState extends State<StartShiftModal> {
                     TextField(
                       keyboardType: TextInputType.number,
                       controller: controllerSalesStart,
+                      autofocus: false,
                       style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -477,7 +538,7 @@ class _StartShiftModalState extends State<StartShiftModal> {
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(16),
                           borderSide: const BorderSide(
-                            color: Colors.amber,
+                            color: AppColors.primary,
                             width: 2,
                           ),
                         ),
@@ -495,7 +556,7 @@ class _StartShiftModalState extends State<StartShiftModal> {
                               (controllerSalesStart.text.isEmpty ||
                                   selectedShift == null)
                               ? Colors.grey.shade300
-                              : Colors.amber,
+                              : AppColors.primary,
                           foregroundColor: Colors.black87,
                           padding: const EdgeInsets.symmetric(vertical: 16),
                           elevation: 0,
@@ -513,6 +574,7 @@ class _StartShiftModalState extends State<StartShiftModal> {
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 16,
+                            color: AppColors.white,
                           ),
                         ),
                       ),

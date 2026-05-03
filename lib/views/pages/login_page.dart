@@ -2,9 +2,14 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:pos_panglima_app/services/auth_service.dart';
 import 'package:pos_panglima_app/services/helper/dio_client.dart';
+import 'package:pos_panglima_app/services/shift_service.dart';
+import 'package:pos_panglima_app/services/storage/shift_storage_service.dart';
+import 'package:pos_panglima_app/utils/app_colors.dart';
+import 'package:pos_panglima_app/utils/crash_reporter.dart';
 import 'package:pos_panglima_app/utils/loader_utils.dart';
 import 'package:pos_panglima_app/utils/snackbar_util.dart';
-import 'package:pos_panglima_app/views/widgets/startShift_modal.dart';
+import 'package:pos_panglima_app/views/widgets/start_shift_modal.dart';
+import 'package:pos_panglima_app/views/widgets_tree.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key, required this.title});
@@ -24,10 +29,13 @@ class _LoginPageState extends State<LoginPage> {
   bool loading = false;
   bool _isObscure = true;
 
+  late final ShiftService shiftService;
+
   @override
   void initState() {
     super.initState();
     authService = AuthService(apiClient.dio);
+    shiftService = ShiftService(apiClient.dio);
   }
 
   @override
@@ -35,6 +43,41 @@ class _LoginPageState extends State<LoginPage> {
     controllerEmail.dispose();
     controllerPw.dispose();
     super.dispose();
+  }
+
+  /// Cek apakah outlet sedang punya shift aktif.
+  /// Return shiftId jika ada, atau null jika tidak ada / gagal.
+  /// Saat shift aktif ditemukan, sekaligus disimpan ke SharedPreferences
+  /// agar [WidgetTree] bisa langsung mengenali shift yang berjalan.
+  Future<int?> _checkActiveShift(dynamic customer) async {
+    try {
+      final outletHubId = (customer is List && customer.isNotEmpty)
+          ? int.tryParse(customer[0].toString())
+          : null;
+      if (outletHubId == null) return null;
+
+      final response = await shiftService.getCurrentShift(outletHubId);
+      final shiftData = response.data is Map ? response.data['data'] : null;
+      if (shiftData == null || shiftData is! Map) return null;
+
+      final shiftId = shiftData['id'] is int
+          ? shiftData['id'] as int
+          : int.tryParse(shiftData['id']?.toString() ?? '');
+      if (shiftId == null) return null;
+
+      final salesStartRaw = shiftData['sales_start'];
+      final salesStart = salesStartRaw is int
+          ? salesStartRaw
+          : int.tryParse(salesStartRaw?.toString() ?? '') ?? 0;
+
+      await ShiftStorageService.saveShiftId(shiftId, salesStart);
+      return shiftId;
+    } catch (e, stack) {
+      // 404 / tidak ada shift aktif bukan error fatal — abaikan untuk Crashlytics.
+      debugPrint('getCurrentShift: $e');
+      CrashReporter.report(e, stack, reason: 'login_page._checkActiveShift');
+      return null;
+    }
   }
 
   Future<void> login() async {
@@ -82,11 +125,25 @@ class _LoginPageState extends State<LoginPage> {
             "tipe": "android",
           });
         }
-      } catch (fcmError) {
+      } catch (fcmError, stack) {
         debugPrint("FCM Error: $fcmError");
+        CrashReporter.report(fcmError, stack, reason: 'login_page.postFcmToken');
       }
 
       if (!mounted) return;
+
+      // Cek apakah shift sudah aktif untuk outlet ini.
+      // Jika ada → langsung masuk ke WidgetTree, modal Start Shift dilewati.
+      final activeShift = await _checkActiveShift(data['customer']);
+      if (!mounted) return;
+
+      if (activeShift != null) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const WidgetTree()),
+        );
+        return;
+      }
 
       // Menampilkan modal shift setelah login berhasil
       showDialog(
@@ -95,7 +152,8 @@ class _LoginPageState extends State<LoginPage> {
         useRootNavigator: true,
         builder: (_) => const StartShiftModal(),
       );
-    } catch (e) {
+    } catch (e, stack) {
+      CrashReporter.report(e, stack, reason: 'login_page.login');
       if (!mounted) return;
       SnackbarUtil.show(
         context,
@@ -119,16 +177,12 @@ class _LoginPageState extends State<LoginPage> {
         height: double.infinity,
         decoration: const BoxDecoration(
           image: DecorationImage(
-            image: AssetImage('assets/images/background.jpg'),
+            image: AssetImage('assets/images/background.png'),
             fit: BoxFit.cover,
           ),
         ),
         child: Container(
-          decoration: BoxDecoration(
-            color: Colors.black.withOpacity(
-              0.3,
-            ), // Overlay gelap agar teks lebih kontras
-          ),
+          decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.3)),
           child: Center(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(24.0),
@@ -137,11 +191,11 @@ class _LoginPageState extends State<LoginPage> {
                   maxWidth: isTablet ? 500 : double.infinity,
                 ),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.95),
+                  color: Colors.white.withValues(alpha: 0.95),
                   borderRadius: BorderRadius.circular(24.0),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
+                      color: Colors.black.withValues(alpha: 0.1),
                       blurRadius: 20,
                       offset: const Offset(0, 10),
                     ),
@@ -154,13 +208,10 @@ class _LoginPageState extends State<LoginPage> {
                   children: [
                     Center(
                       child: Image.asset(
-                        'assets/images/logo.png',
+                        'assets/images/icon_launcher.png',
                         height: 80.0,
-                        errorBuilder: (_, __, ___) => const Icon(
-                          Icons.storefront,
-                          size: 80,
-                          color: Colors.amber,
-                        ),
+                        errorBuilder: (_, __, ___) =>
+                            const Icon(Icons.storefront, size: 80),
                       ),
                     ),
                     const SizedBox(height: 32.0),
@@ -206,8 +257,8 @@ class _LoginPageState extends State<LoginPage> {
                       child: ElevatedButton(
                         onPressed: loading ? null : login,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.amber,
-                          foregroundColor: Colors.black,
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
                           elevation: 0,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16.0),
@@ -219,7 +270,7 @@ class _LoginPageState extends State<LoginPage> {
                                 strokeWidth: 3,
                                 timeout: const Duration(seconds: 10),
                                 onRetry: () {},
-                              ) // Menggunakan utilitas baru
+                              )
                             : const Text(
                                 "Masuk",
                                 style: TextStyle(
@@ -254,7 +305,7 @@ class _LoginPageState extends State<LoginPage> {
       keyboardType: keyboardType,
       decoration: InputDecoration(
         hintText: hint,
-        prefixIcon: Icon(icon, color: Colors.amber.shade700, size: 20),
+        prefixIcon: Icon(icon, color: AppColors.primary, size: 20),
         suffixIcon: isPassword
             ? IconButton(
                 icon: Icon(
@@ -277,7 +328,7 @@ class _LoginPageState extends State<LoginPage> {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16.0),
-          borderSide: const BorderSide(color: Colors.amber, width: 2),
+          borderSide: const BorderSide(color: AppColors.primary, width: 2),
         ),
       ),
     );

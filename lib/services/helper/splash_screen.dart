@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:safe_device/safe_device.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:pos_panglima_app/services/helper/dio_client.dart';
 import 'dart:convert';
+import 'package:pos_panglima_app/utils/crash_reporter.dart';
+import 'package:pos_panglima_app/views/pages/device_locked_screen.dart';
 import 'package:pos_panglima_app/services/storage/shift_storage_service.dart';
+import 'package:pos_panglima_app/utils/app_colors.dart';
 import 'package:pos_panglima_app/views/pages/login_page.dart';
 import 'package:pos_panglima_app/views/widgets_tree.dart';
 
@@ -18,12 +23,32 @@ class _SplashScreenState extends State<SplashScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      precacheImage(
+        const AssetImage('assets/images/icon_launcher.png'),
+        context,
+      );
       checkLogin();
     });
   }
 
   Future<void> checkLogin() async {
     await Future.delayed(const Duration(seconds: 1));
+
+    bool jailbroken = false;
+    try {
+      jailbroken = await SafeDevice.isJailBroken;
+    } catch (_) {
+      // Plugin tidak tersedia di platform ini (emulator / web)
+    }
+    if (jailbroken) {
+      await const FlutterSecureStorage().deleteAll();
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const DeviceLockedScreen()),
+      );
+      return;
+    }
 
     final token = await apiClient.getToken();
     final result = await ShiftStorageService.getShiftId();
@@ -41,6 +66,7 @@ class _SplashScreenState extends State<SplashScreen> {
         await ShiftStorageService.clearShift();
         await apiClient.clearToken();
       }
+      if (!mounted) return;
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (_) => const LoginPage(title: 'Login Page')),
@@ -63,38 +89,35 @@ class _SplashScreenState extends State<SplashScreen> {
 
       final expDate = DateTime.fromMillisecondsSinceEpoch(exp * 1000);
       return DateTime.now().isAfter(expDate);
-    } catch (e) {
+    } catch (e, stack) {
+      CrashReporter.report(e, stack, reason: 'splash_screen.isTokenExpired');
       return true;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // Mengambil ukuran layar untuk responsivitas
     final size = MediaQuery.of(context).size;
     final isTablet = size.width > 600;
 
     return Scaffold(
-      // Menggunakan Container untuk background imej geometris
       body: Container(
         width: double.infinity,
         height: double.infinity,
         decoration: const BoxDecoration(
           image: DecorationImage(
-            // Ganti dengan path background geometris maron-amber Anda
-            image: AssetImage('assets/images/background.jpg'),
+            image: AssetImage('assets/images/background.png'),
             fit: BoxFit.cover,
           ),
         ),
         child: Container(
-          // Overlay gradasi halus agar logo dan teks lebih pop-out
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
               colors: [
-                Colors.black.withOpacity(0.2),
-                Colors.black.withOpacity(0.4),
+                Colors.black.withValues(alpha: 0.2),
+                Colors.black.withValues(alpha: 0.4),
               ],
             ),
           ),
@@ -121,7 +144,7 @@ class _SplashScreenState extends State<SplashScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  "Sistem Kasir Pintar & Terintegrasi",
+                  "Panglima Roqiiqu Group",
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w500,
@@ -137,11 +160,11 @@ class _SplashScreenState extends State<SplashScreen> {
                       height: 40,
                       child: CircularProgressIndicator(
                         strokeWidth: 4,
-                        strokeCap: StrokeCap.round, // Ujung bulat (Modern)
+                        strokeCap: StrokeCap.round,
                         valueColor: const AlwaysStoppedAnimation<Color>(
-                          Colors.amber,
+                          AppColors.primary,
                         ),
-                        backgroundColor: Colors.white.withOpacity(0.2),
+                        backgroundColor: Colors.white.withValues(alpha: 0.2),
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -150,7 +173,7 @@ class _SplashScreenState extends State<SplashScreen> {
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
-                        color: Colors.white.withOpacity(0.8),
+                        color: Colors.white.withValues(alpha: 0.8),
                         letterSpacing: 0.5,
                       ),
                     ),

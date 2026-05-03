@@ -5,91 +5,166 @@ class SkeletonLoader {
   static final Color _baseColor = Colors.grey.shade300;
   static final Color _highlightColor = Colors.grey.shade100;
   // 1. Loading untuk List Riwayat Penjualan (Card List)
-  static Widget listHistorySkeleton() {
-    return ListView.builder(
-      itemCount: 6, // Tampilkan 6 baris bayangan
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemBuilder: (context, index) {
-        return Shimmer.fromColors(
-          baseColor: Colors.grey.shade300,
-          highlightColor: Colors.grey.shade100,
-          child: Container(
-            margin: const EdgeInsets.only(bottom: 12),
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 50,
-                  height: 50,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(8),
+  static Widget listHistorySkeleton({
+    Duration timeout = const Duration(seconds: 10),
+    VoidCallback? onRetry,
+  }) {
+    return _SkeletonWithRetry(
+      timeout: timeout,
+      onRetry: onRetry,
+      child: ListView.builder(
+        itemCount: 6,
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        itemBuilder: (context, index) {
+          return Shimmer.fromColors(
+            baseColor: _baseColor,
+            highlightColor: _highlightColor,
+            child: Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 50,
+                    height: 50,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(width: 120, height: 12, color: Colors.white),
-                      const SizedBox(height: 8),
-                      Container(width: 80, height: 10, color: Colors.white),
-                    ],
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(width: 120, height: 12, color: Colors.white),
+                        const SizedBox(height: 8),
+                        Container(width: 80, height: 10, color: Colors.white),
+                      ],
+                    ),
                   ),
-                ),
-                Container(width: 60, height: 15, color: Colors.white),
-              ],
+                  Container(width: 60, height: 15, color: Colors.white),
+                ],
+              ),
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 
   // 2. Loading untuk Detail Penjualan (Mirip Struk/Invoice)
-  static Widget detailHistorySkeleton() {
-    return Shimmer.fromColors(
-      baseColor: _baseColor,
-      highlightColor: _highlightColor,
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Top Buttons (Share & Cetak)
-            Row(
-              children: [
-                Expanded(
-                  child: Container(
-                    height: 45,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
+  static Widget detailHistorySkeleton({
+    Duration timeout = const Duration(seconds: 10),
+    VoidCallback? onRetry,
+  }) {
+    return _SkeletonWithRetry(
+      timeout: timeout,
+      onRetry: onRetry,
+      child: Shimmer.fromColors(
+        baseColor: _baseColor,
+        highlightColor: _highlightColor,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Top Buttons (Share & Cetak)
+              Row(
+                children: [
+                  Expanded(
+                    child: Container(
+                      height: 45,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Container(
-                    height: 45,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Container(
+                      height: 45,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 32),
+                ],
+              ),
+              const SizedBox(height: 32),
 
-            // Section 1: Informasi Penjualan
-            Container(width: 150, height: 18, color: Colors.white), // Title
-            const SizedBox(height: 16),
+              // Section 1: Informasi Penjualan
+              Container(width: 150, height: 18, color: Colors.white), // Title
+              const SizedBox(height: 16),
+              GridView.count(
+                shrinkWrap: true,
+                crossAxisCount: 2,
+                childAspectRatio: 3,
+                mainAxisSpacing: 12,
+                crossAxisSpacing: 12,
+                children: List.generate(
+                  4,
+                  (index) => Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 32),
+
+              // Section 2: Informasi Pembayaran
+              Container(width: 180, height: 18, color: Colors.white), // Title
+              const SizedBox(height: 16),
+              Container(
+                height: 100,
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+              ),
+              const SizedBox(height: 32),
+
+              // Section 3: Riwayat Penerimaan
+              Container(width: 160, height: 18, color: Colors.white), // Title
+              const SizedBox(height: 16),
+              Container(
+                height: 80,
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  static Widget detailLaporanSkeleton({
+    Duration timeout = const Duration(seconds: 10),
+    VoidCallback? onRetry,
+  }) {
+    return _SkeletonWithRetry(
+      timeout: timeout,
+      onRetry: onRetry,
+      child: Shimmer.fromColors(
+        baseColor: _baseColor,
+        highlightColor: _highlightColor,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.start,
+          children: [
             GridView.count(
               shrinkWrap: true,
               crossAxisCount: 2,
@@ -97,7 +172,7 @@ class SkeletonLoader {
               mainAxisSpacing: 12,
               crossAxisSpacing: 12,
               children: List.generate(
-                4,
+                2,
                 (index) => Container(
                   decoration: BoxDecoration(
                     color: Colors.white,
@@ -106,23 +181,16 @@ class SkeletonLoader {
                 ),
               ),
             ),
-            const SizedBox(height: 32),
 
-            // Section 2: Informasi Pembayaran
-            Container(width: 180, height: 18, color: Colors.white), // Title
             const SizedBox(height: 16),
             Container(
-              height: 100,
+              height: 80,
               width: double.infinity,
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(12),
               ),
             ),
-            const SizedBox(height: 32),
-
-            // Section 3: Riwayat Penerimaan
-            Container(width: 160, height: 18, color: Colors.white), // Title
             const SizedBox(height: 16),
             Container(
               height: 80,
@@ -138,96 +206,94 @@ class SkeletonLoader {
     );
   }
 
-  static Widget detailLaporanSkeleton() {
-    return Shimmer.fromColors(
-      baseColor: _baseColor,
-      highlightColor: _highlightColor,
-      child: Column(
-        // crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.start,
-        children: [
-          GridView.count(
-            shrinkWrap: true,
-            crossAxisCount: 2,
-            childAspectRatio: 3,
-            mainAxisSpacing: 12,
-            crossAxisSpacing: 12,
-            children: List.generate(
-              2,
-              (index) => Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
+  static Widget detailInventorySkeleton({
+    Duration timeout = const Duration(seconds: 10),
+    VoidCallback? onRetry,
+  }) {
+    return _SkeletonWithRetry(
+      timeout: timeout,
+      onRetry: onRetry,
+      child: Shimmer.fromColors(
+        baseColor: _baseColor,
+        highlightColor: _highlightColor,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.start,
+          children: [
+            Column(
+              children: List.generate(
+                2,
+                (index) => Container(
+                  margin: const EdgeInsets.only(bottom: 24),
+                  height: 150,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
               ),
             ),
-          ),
-
-          const SizedBox(height: 16),
-          Container(
-            height: 80,
-            width: double.infinity,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Container(
-            height: 80,
-            width: double.infinity,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
-  static Widget detailInventorySkeleton() {
-    return Shimmer.fromColors(
-      baseColor: _baseColor,
-      highlightColor: _highlightColor,
-      child: Column(
-        // crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.start,
-        children: [
-          Column(
-            children: List.generate(
-              2,
-              (index) => Container(
-                margin: EdgeInsets.only(bottom: 24),
-                height: 150, // sesuaikan tinggi
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
+  static Widget menuSkeleton({
+    Duration timeout = const Duration(seconds: 10),
+    VoidCallback? onRetry,
+  }) {
+    return _SkeletonWithRetry(
+      timeout: timeout,
+      onRetry: onRetry,
+      child: Shimmer.fromColors(
+        baseColor: _baseColor,
+        highlightColor: _highlightColor,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.start,
+            children: [
+              GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: 15,
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 5,
+                  mainAxisSpacing: 12,
+                  crossAxisSpacing: 12,
+                  mainAxisExtent: 160,
+                ),
+                itemBuilder: (context, index) => Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
                 ),
               ),
-            ),
+            ],
           ),
-        ],
+        ),
       ),
     );
-  }
-
-  static Widget menuSkeleton(Duration timeout, VoidCallback? onRetry) {
-    return _MenuSkeletonWithRetry(timeout: timeout, onRetry: onRetry);
   }
 }
 
-class _MenuSkeletonWithRetry extends StatefulWidget {
+/// Widget generic untuk membungkus skeleton dengan timeout & retry
+class _SkeletonWithRetry extends StatefulWidget {
   final Duration timeout;
   final VoidCallback? onRetry;
+  final Widget child;
 
-  const _MenuSkeletonWithRetry({required this.timeout, this.onRetry});
+  const _SkeletonWithRetry({
+    required this.timeout,
+    required this.child,
+    this.onRetry,
+  });
 
   @override
-  State<_MenuSkeletonWithRetry> createState() => _MenuSkeletonWithRetryState();
+  State<_SkeletonWithRetry> createState() => _SkeletonWithRetryState();
 }
 
-class _MenuSkeletonWithRetryState extends State<_MenuSkeletonWithRetry> {
+class _SkeletonWithRetryState extends State<_SkeletonWithRetry> {
   bool _isTimedOut = false;
 
   @override
@@ -246,10 +312,7 @@ class _MenuSkeletonWithRetryState extends State<_MenuSkeletonWithRetry> {
 
   @override
   Widget build(BuildContext context) {
-    final showRetryButton = _isTimedOut && widget.onRetry != null;
-
-    if (showRetryButton) {
-      // Tampilkan tombol retry
+    if (_isTimedOut && widget.onRetry != null) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -257,7 +320,8 @@ class _MenuSkeletonWithRetryState extends State<_MenuSkeletonWithRetry> {
             Icon(Icons.wifi_off_rounded, size: 48, color: Colors.grey.shade400),
             const SizedBox(height: 12),
             Text(
-              'Gagal memuat menu',
+              'Gagal memuat data \nPastikan koneksi internet anda aktif.',
+              textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 14,
                 color: Colors.grey.shade600,
@@ -294,34 +358,6 @@ class _MenuSkeletonWithRetryState extends State<_MenuSkeletonWithRetry> {
       );
     }
 
-    // Tampilkan shimmer skeleton
-    return Shimmer.fromColors(
-      baseColor: SkeletonLoader._baseColor,
-      highlightColor: SkeletonLoader._highlightColor,
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.start,
-          children: [
-            GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: 15,
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 5,
-                mainAxisSpacing: 12,
-                crossAxisSpacing: 12,
-                mainAxisExtent: 160, // ← atur tinggi item di sini
-              ),
-              itemBuilder: (context, index) => Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+    return widget.child;
   }
 }

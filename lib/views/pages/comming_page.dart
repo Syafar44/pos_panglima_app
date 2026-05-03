@@ -5,6 +5,6 @@ class CommingPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(child: Center(child: Text("Halaman Comming")));
+    return const SizedBox(child: Center(child: Text("Halaman Comming")));
   }
 }

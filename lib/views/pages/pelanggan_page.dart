@@ -23,20 +23,20 @@ class _PelangganPageState extends State<PelangganPage> {
         Expanded(
           flex: 1,
           child: Container(
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               border: Border(right: BorderSide(color: Colors.black26)),
             ),
             child: Column(
               children: [
                 Container(
-                  padding: EdgeInsets.symmetric(horizontal: 12.0),
-                  decoration: BoxDecoration(
+                  padding: const EdgeInsets.symmetric(horizontal: 12.0),
+                  decoration: const BoxDecoration(
                     border: Border(bottom: BorderSide(color: Colors.black26)),
                   ),
-                  child: TextField(
+                  child: const TextField(
                     // controller: searchController,
                     autofocus: true,
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       icon: Icon(Icons.search),
                       hintText: 'Cari Pelanggan...',
                       border: InputBorder.none,
@@ -57,7 +57,7 @@ class _PelangganPageState extends State<PelangganPage> {
                       },
                       child: Container(
                         color: Colors.white,
-                        padding: EdgeInsets.all(14.0),
+                        padding: const EdgeInsets.all(14.0),
                         child: Row(
                           spacing: 16.0,
                           children: [
@@ -74,20 +74,20 @@ class _PelangganPageState extends State<PelangganPage> {
                                   begin: Alignment.topLeft,
                                   end: Alignment.bottomRight,
                                 ),
-                                borderRadius: BorderRadius.all(
+                                borderRadius: const BorderRadius.all(
                                   Radius.circular(50.0),
                                 ),
                               ),
-                              padding: EdgeInsets.all(18.0),
+                              padding: const EdgeInsets.all(18.0),
                               child: Text(
                                 getInitials('Abah Budi'),
-                                style: TextStyle(
+                                style: const TextStyle(
                                   fontWeight: FontWeight.w900,
                                   fontSize: 25.0,
                                 ),
                               ),
                             ),
-                            Column(
+                            const Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
@@ -115,7 +115,7 @@ class _PelangganPageState extends State<PelangganPage> {
                       },
                       child: Container(
                         color: Colors.amber[100],
-                        padding: EdgeInsets.all(14.0),
+                        padding: const EdgeInsets.all(14.0),
                         child: Row(
                           spacing: 16.0,
                           children: [
@@ -132,20 +132,20 @@ class _PelangganPageState extends State<PelangganPage> {
                                   begin: Alignment.topLeft,
                                   end: Alignment.bottomRight,
                                 ),
-                                borderRadius: BorderRadius.all(
+                                borderRadius: const BorderRadius.all(
                                   Radius.circular(50.0),
                                 ),
                               ),
-                              padding: EdgeInsets.all(18.0),
+                              padding: const EdgeInsets.all(18.0),
                               child: Text(
                                 getInitials('Mamat Abdur'),
-                                style: TextStyle(
+                                style: const TextStyle(
                                   fontWeight: FontWeight.w900,
                                   fontSize: 25.0,
                                 ),
                               ),
                             ),
-                            Column(
+                            const Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
@@ -178,7 +178,7 @@ class _PelangganPageState extends State<PelangganPage> {
             children: [
               Container(
                 color: Colors.grey[200],
-                padding: EdgeInsets.all(16.0),
+                padding: const EdgeInsets.all(16.0),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -198,20 +198,20 @@ class _PelangganPageState extends State<PelangganPage> {
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
                             ),
-                            borderRadius: BorderRadius.all(
+                            borderRadius: const BorderRadius.all(
                               Radius.circular(50.0),
                             ),
                           ),
-                          padding: EdgeInsets.all(18.0),
+                          padding: const EdgeInsets.all(18.0),
                           child: Text(
                             getInitials('Mamat Abdur'),
-                            style: TextStyle(
+                            style: const TextStyle(
                               fontWeight: FontWeight.w900,
                               fontSize: 25.0,
                             ),
                           ),
                         ),
-                        Column(
+                        const Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
@@ -229,7 +229,7 @@ class _PelangganPageState extends State<PelangganPage> {
                         ),
                       ],
                     ),
-                    Row(
+                    const Row(
                       spacing: 20.0,
                       children: [
                         Icon(Icons.call),
@@ -240,8 +240,8 @@ class _PelangganPageState extends State<PelangganPage> {
                   ],
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.all(15.0),
+              const Padding(
+                padding: EdgeInsets.all(15.0),
                 child: Column(
                   spacing: 10.0,
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -263,9 +263,9 @@ class _PelangganPageState extends State<PelangganPage> {
                   ],
                 ),
               ),
-              Divider(),
-              Padding(
-                padding: const EdgeInsets.all(15.0),
+              const Divider(),
+              const Padding(
+                padding: EdgeInsets.all(15.0),
                 child: Column(
                   spacing: 10.0,
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -287,7 +287,7 @@ class _PelangganPageState extends State<PelangganPage> {
                   ],
                 ),
               ),
-              Divider(),
+              const Divider(),
             ],
           ),
         ),

@@ -5,8 +5,19 @@ class InventoryService {
 
   InventoryService(this.dio);
 
-  Future<Response> getList(String params) {
-    return dio.get("/inventory/inventory_transfer?$params");
+  Future<Response> getList({
+    required int page,
+    required int limit,
+    required String outletHubId,
+  }) {
+    return dio.get(
+      "/inventory/inventory_transfer",
+      queryParameters: {
+        'page': page,
+        'limit': limit,
+        'to_outlet_hub_id': outletHubId,
+      },
+    );
   }
 
   Future<Response> getDetail(int id) {
@@ -14,6 +25,9 @@ class InventoryService {
   }
 
   Future<Response> patchRealisasi(int id, Map<String, dynamic> payload) {
-    return dio.patch("/inventory/inventory_transfer/$id/realisasi", data: payload);
+    return dio.patch(
+      "/inventory/inventory_transfer/$id/realisasi",
+      data: payload,
+    );
   }
 }
