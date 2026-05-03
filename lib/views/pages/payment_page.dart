@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/services.dart';
+
 import 'package:blue_thermal_printer/blue_thermal_printer.dart';
 import 'package:pos_panglima_app/services/bluetooth_printer_service.dart';
 import 'package:dio/dio.dart';
@@ -19,8 +21,10 @@ import 'package:pos_panglima_app/services/order_service.dart';
 import 'package:pos_panglima_app/services/storage/shift_storage_service.dart';
 import 'package:pos_panglima_app/utils/convert.dart';
 import 'package:pos_panglima_app/utils/loader_utils.dart';
+import 'package:pos_panglima_app/utils/rupiah_formatter.dart';
 import 'package:pos_panglima_app/utils/snackbar_util.dart';
 import 'package:pos_panglima_app/views/components/ui/custom_checkbox.dart';
+import 'package:pos_panglima_app/views/widgets/network_indicator.dart';
 import 'package:pos_panglima_app/views/widgets_tree.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -184,6 +188,36 @@ class _PaymentPageState extends State<PaymentPage> {
     }
   }
 
+  void _showSlowExecutionDialog() {
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (_) => AlertDialog(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.hourglass_top_rounded, color: Colors.orange),
+            SizedBox(width: 10),
+            Text('Proses Lambat', style: TextStyle(fontSize: 18)),
+          ],
+        ),
+        content: const Text(
+          'Transaksi sedang diproses dan membutuhkan waktu lebih lama dari biasanya. '
+          'Harap tunggu, jangan tutup aplikasi.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Tutup'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void handlePayment() async {
     setState(() => isLoading = true);
     bool online = await NetworkService.isOnline();
@@ -201,6 +235,11 @@ class _PaymentPageState extends State<PaymentPage> {
     }
 
     int? orderId;
+    late Future<void> printFuture;
+
+    final slowTimer = Timer(const Duration(seconds: 15), () {
+      if (mounted) _showSlowExecutionDialog();
+    });
 
     try {
       if (selectedMethodName != 'Compliment') {
@@ -232,9 +271,10 @@ class _PaymentPageState extends State<PaymentPage> {
 
           final response = await orderService.postOrder(payloadOrder);
           orderId = response.data['data']['id'];
-          String documentNumber = response.data['data']['document_number'];
+          final documentNumber =
+              response.data['data']['document_number'] as String;
 
-          await BluetoothPrinterService.printStruk(
+          printFuture = BluetoothPrinterService.printStruk(
             listProduk: cartItems,
             totalQuantity: totalQuantity,
             documentNumber: documentNumber,
@@ -267,9 +307,10 @@ class _PaymentPageState extends State<PaymentPage> {
 
           final response = await orderService.postOrder(payloadOrder);
           orderId = response.data['data']['id'];
-          String documentNumber = response.data['data']['document_number'];
+          final documentNumber =
+              response.data['data']['document_number'] as String;
 
-          await BluetoothPrinterService.printStruk(
+          printFuture = BluetoothPrinterService.printStruk(
             listProduk: cartItems,
             totalQuantity: totalQuantity,
             documentNumber: documentNumber,
@@ -285,10 +326,7 @@ class _PaymentPageState extends State<PaymentPage> {
       } else {
         final proceed = await showRemarksModal();
 
-        if (!proceed) {
-          setState(() => isLoading = false);
-          return;
-        }
+        if (!proceed) return;
 
         Map<String, dynamic> payloadOrder = {
           "customers_id": 16, // default
@@ -309,9 +347,10 @@ class _PaymentPageState extends State<PaymentPage> {
 
         final response = await orderService.postOrder(payloadOrder);
         orderId = response.data['data']['id'];
-        String documentNumber = response.data['data']['document_number'];
+        final documentNumber =
+            response.data['data']['document_number'] as String;
 
-        await BluetoothPrinterService.printStruk(
+        printFuture = BluetoothPrinterService.printStruk(
           listProduk: cartItems,
           totalQuantity: totalQuantity,
           documentNumber: documentNumber,
@@ -325,46 +364,38 @@ class _PaymentPageState extends State<PaymentPage> {
         );
       }
 
-      await cameraService.initialize();
-      final file = await cameraService.capture();
+      final uploadFuture = () async {
+        await cameraService.initialize();
+        final file = await cameraService.capture();
+        if (file == null) return;
 
-      if (file == null) {
-        return;
-      }
+        final mimeType =
+            lookupMimeType(file.path) ?? 'application/octet-stream';
+        final formData = FormData.fromMap({
+          "pos_orders_id": orderId,
+          "name": file.path.split('/').last,
+          "mime_type": mimeType,
+          "file": await MultipartFile.fromFile(
+            file.path,
+            filename: file.path.split('/').last,
+          ),
+        });
+        await orderService.postLampiran(formData);
+      }();
 
-      final mimeType = lookupMimeType(file.path) ?? 'application/octet-stream';
-
-      final formData = FormData.fromMap({
-        "pos_orders_id": orderId,
-        "name": file.path.split('/').last,
-        "mime_type": mimeType,
-        "file": await MultipartFile.fromFile(
-          file.path,
-          filename: file.path.split('/').last,
-        ),
-      });
-
-      await orderService.postLampiran(formData);
+      await Future.wait([printFuture, uploadFuture]);
 
       isTargetNotifier.value = true;
-
       await clearVouchers();
 
-      await cameraService.dispose();
-
       int kembalian = 0;
-
       if (selectedTab == 0) {
         final int yangHarusDibayar = totalPayment - nominalVoucher;
-
-        if (selectedPayment == 'exact') {
-          kembalian = 0;
-        } else if (selectedPayment == 'rounded') {
+        if (selectedPayment == 'rounded') {
           kembalian = roundedAmount - yangHarusDibayar;
         } else if (selectedPayment == 'custom') {
           kembalian = customAmount - yangHarusDibayar;
         }
-
         if (kembalian < 0) kembalian = 0;
       }
 
@@ -402,6 +433,10 @@ class _PaymentPageState extends State<PaymentPage> {
         status: SnackBarStatus.error,
       );
       paymentErrorModal();
+    } finally {
+      slowTimer.cancel();
+      cameraService.dispose();
+      if (mounted) setState(() => isLoading = false);
     }
   }
 
@@ -650,7 +685,12 @@ class _PaymentPageState extends State<PaymentPage> {
                     elevation: 0,
                   ),
                   onPressed: () {
-                    Navigator.of(context).pop();
+                    selectedPageNotifier.value = 0;
+                    Navigator.pushAndRemoveUntil(
+                      context,
+                      MaterialPageRoute(builder: (_) => const WidgetTree()),
+                      (route) => false,
+                    );
                   },
                   child: const Text(
                     'Selesai',
@@ -1048,12 +1088,10 @@ class _PaymentPageState extends State<PaymentPage> {
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
         surfaceTintColor: Colors.transparent,
+        actions: const [NetworkIndicatorWidget()],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
-          child: Container(
-            color: Colors.grey[300],
-            height: 1, // tebal garis
-          ),
+          child: Container(color: Colors.grey[300], height: 1),
         ),
       ),
       body: isLoadingCart || isLoadingMethod || isLoadingUserId
@@ -1142,7 +1180,9 @@ class _PaymentPageState extends State<PaymentPage> {
                                       color: Colors.white,
                                       borderRadius: BorderRadius.circular(12),
                                       border: Border.all(
-                                        color: Colors.grey.withValues(alpha: 0.3),
+                                        color: Colors.grey.withValues(
+                                          alpha: 0.3,
+                                        ),
                                       ),
                                     ),
                                     child: Row(
@@ -1332,7 +1372,7 @@ class _PaymentPageState extends State<PaymentPage> {
                             //                   10,
                             //                 ),
                             //                 borderSide: BorderSide(
-                            //                   color: Colors.grey.withValues(alpha: 
+                            //                   color: Colors.grey.withValues(alpha:
                             //                     0.2,
                             //                   ),
                             //                 ),
@@ -1394,7 +1434,9 @@ class _PaymentPageState extends State<PaymentPage> {
                                   ),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Colors.black.withValues(alpha: 0.05),
+                                      color: Colors.black.withValues(
+                                        alpha: 0.05,
+                                      ),
                                       blurRadius: 10,
                                       offset: const Offset(0, -5),
                                     ),
@@ -1624,6 +1666,11 @@ class _PaymentPageState extends State<PaymentPage> {
           const SizedBox(height: 20),
           TextField(
             controller: _customAmountController,
+            keyboardType: TextInputType.number,
+            inputFormatters: [
+              FilteringTextInputFormatter.digitsOnly,
+              RupiahFormatter(),
+            ],
             decoration: InputDecoration(
               labelText: "Masukkan Nominal",
               errorText: isValidCustom
@@ -1631,11 +1678,9 @@ class _PaymentPageState extends State<PaymentPage> {
                   : "Nominal harus lebih besar dari total penerimaan",
               border: const OutlineInputBorder(),
             ),
-            keyboardType: TextInputType.number,
             onChanged: (val) {
               setState(() {
-                customAmount =
-                    int.tryParse(val.replaceAll(RegExp(r'\D'), "")) ?? 0;
+                customAmount = parseRupiah(val);
               });
             },
           ),

@@ -9,6 +9,7 @@ import 'package:pos_panglima_app/views/pages/pesanan_baru_page.dart';
 // import 'package:pos_panglima_app/views/pages/open_bill_page.dart';
 import 'package:pos_panglima_app/views/pages/riwayat_penjualan_page.dart';
 import 'package:pos_panglima_app/views/widgets/drawer_widget.dart';
+import 'package:pos_panglima_app/views/widgets/network_indicator.dart';
 
 List<Map<String, dynamic>> pages = [
   {'name': 'Pesanan Baru', 'builder': () => const PesananBaruPage()},
@@ -34,7 +35,10 @@ class WidgetTree extends StatelessWidget {
             appBar: AppBar(
               title: Text(
                 pages[value]['name'],
-                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               centerTitle: false,
               flexibleSpace: Container(
@@ -46,6 +50,7 @@ class WidgetTree extends StatelessWidget {
                   ),
                 ),
               ),
+              actions: const [NetworkIndicatorWidget()],
             ),
             body: pages[value]['builder'](),
             drawer: DrawerWidget(value: value),

@@ -72,15 +72,29 @@ class _StockOpnamePageState extends State<StockOpnamePage> {
     initializeDateFormatting('id_ID', null).then((_) {
       if (mounted) setState(() => _localeReady = true);
     });
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
     fetchDetail();
   }
 
   void _toggleOrientation() {
-    setState(() => _isPortrait = !_isPortrait);
+    final toPortrait = !_isPortrait;
+    setState(() => _isPortrait = toPortrait);
+    SystemChrome.setPreferredOrientations(
+      toPortrait
+          ? [DeviceOrientation.portraitUp, DeviceOrientation.portraitDown]
+          : [DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight],
+    );
   }
 
   @override
   void dispose() {
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
     for (final item in items) {
       item.dispose();
     }
@@ -394,10 +408,7 @@ class _StockOpnamePageState extends State<StockOpnamePage> {
 
   @override
   Widget build(BuildContext context) {
-    return RotatedBox(
-      quarterTurns: _isPortrait ? 3 : 0,
-      child: _buildScaffold(context),
-    );
+    return _buildScaffold(context);
   }
 
   Widget _buildScaffold(BuildContext context) {
