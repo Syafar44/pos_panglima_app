@@ -61,6 +61,7 @@ class _UpdateProductModalWidgetState extends State<UpdateProductModalWidget> {
   final TextEditingController catatanController = TextEditingController();
   bool selectedUnit = false;
   bool? hasShift;
+  bool isSubmitting = false;
 
   Timer? _timer;
   final Duration _interval = const Duration(milliseconds: 100);
@@ -69,6 +70,13 @@ class _UpdateProductModalWidgetState extends State<UpdateProductModalWidget> {
     if (quantity > 1) {
       setState(() {
         quantity--;
+        final newMax = (widget.maxQty ?? 0) * quantity;
+        if (totalSelectedProps > newMax) {
+          selectedProps.clear();
+          mergedProps = (widget.posCartProps ?? []).map((e) {
+            return {"pos_menus_id": e["pos_menus_id"], "quantity": 0};
+          }).toList();
+        }
       });
     }
   }
@@ -157,27 +165,30 @@ class _UpdateProductModalWidgetState extends State<UpdateProductModalWidget> {
     }).toList();
   }
 
-  void savedToCart(int id) async {
+  void updateToCart(int id) async {
+    if (isSubmitting) return;
+    setState(() => isSubmitting = true);
+
     mergedProps = selectedProps.entries.map((entry) {
       return {"pos_menus_id": entry.key, "quantity": entry.value};
     }).toList();
 
-    // late int discount = diskonController.text.isEmpty
-    //     ? 0
-    //     : selectedUnit == false
-    //     ? int.parse(diskonController.text).toInt()
-    //     : ((int.parse(diskonController.text) / 100) * (widget.price * quantity))
-    //           .toInt();
-    late int discount = diskonController.text.isEmpty
-        ? 0
-        : int.parse(diskonController.text).toInt();
-
+    final int discount = int.tryParse(diskonController.text) ?? 0;
     final int subtotal = widget.price * quantity;
     final int tax = 0;
-
     final int totalDiscount = selectedUnit
         ? subtotal * discount ~/ 100
         : discount;
+
+    if (totalDiscount > subtotal) {
+      SnackbarUtil.show(
+        context,
+        title: 'Diskon tidak valid',
+        message: 'Diskon tidak boleh melebihi subtotal produk.',
+        status: SnackBarStatus.warning,
+      );
+      return;
+    }
 
     Map<String, dynamic> payload = {
       "pos_menus_id": widget.posMenusId,
@@ -194,6 +205,9 @@ class _UpdateProductModalWidgetState extends State<UpdateProductModalWidget> {
 
     try {
       await cartService.updateCart(id, payload);
+      if (!mounted) return;
+      widget.onSaved();
+      Navigator.of(context).pop();
     } catch (e, stack) {
       CrashReporter.report(
         e,
@@ -208,11 +222,9 @@ class _UpdateProductModalWidgetState extends State<UpdateProductModalWidget> {
             'Terjadi kesalahan saat memperbarui data. Mohon periksa koneksi atau coba kembali.',
         status: SnackBarStatus.error,
       );
+    } finally {
+      if (mounted) setState(() => isSubmitting = false);
     }
-
-    if (!mounted) return;
-    widget.onSaved();
-    Navigator.of(context).pop();
   }
 
   Future<void> _loadShiftStatus() async {
@@ -455,11 +467,7 @@ class _UpdateProductModalWidgetState extends State<UpdateProductModalWidget> {
                                   StepButton(
                                     icon: Icons.remove,
                                     color: Colors.grey[200]!,
-                                    onTap: () {
-                                      if (quantity > 1) {
-                                        setState(() => quantity--);
-                                      }
-                                    },
+                                    onTap: _decreaseQuantity,
                                     onLongPressStart: _startDecreasing,
                                     onLongPressEnd: _stopTimer,
                                   ),
@@ -787,7 +795,9 @@ class _UpdateProductModalWidgetState extends State<UpdateProductModalWidget> {
         widget.maxQty == 0 ||
         totalSelectedProps == (widget.maxQty! * quantity);
 
-    Color btnColor = isPropsValid ? AppColors.primary : Colors.grey.shade300;
+    Color btnColor = isPropsValid && !isSubmitting
+        ? AppColors.primary
+        : Colors.grey.shade300;
 
     return ElevatedButton(
       style: ElevatedButton.styleFrom(
@@ -797,30 +807,35 @@ class _UpdateProductModalWidgetState extends State<UpdateProductModalWidget> {
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
-      onPressed: () {
-        // 1. Cek Shift
-        if (hasShift == false) {
-          _showWarningShift();
-          return;
-        }
-
-        // 2. Cek Validasi Produk (Topping/Props)
-        if (!isPropsValid) {
-          // Opsional: Beri toast/snackbar "Pilihan belum lengkap"
-          return;
-        }
-
-        // 3. Eksekusi
-        savedToCart(widget.id);
-      },
-      child: const Text(
-        'Simpan',
-        style: TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.bold,
-          color: AppColors.white,
-        ),
-      ),
+      onPressed: (isSubmitting || !isPropsValid)
+          ? null
+          : () {
+              if (hasShift == false) {
+                _showWarningShift();
+                return;
+              }
+              updateToCart(widget.id);
+            },
+      child: isSubmitting
+          ? const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 2.0),
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.black54,
+                ),
+              ),
+            )
+          : const Text(
+              'Simpan',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: AppColors.white,
+              ),
+            ),
     );
   }
 }

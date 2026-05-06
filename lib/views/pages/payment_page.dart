@@ -244,7 +244,7 @@ class _PaymentPageState extends State<PaymentPage> {
     try {
       if (selectedMethodName != 'Compliment') {
         if (selectedTab == 0) {
-          finalPayment = totalPayment;
+          finalPayment = totalPayment - nominalVoucher;
 
           if (selectedPayment == 'rounded') {
             finalPayment = roundedAmount;
@@ -261,9 +261,9 @@ class _PaymentPageState extends State<PaymentPage> {
             "pos_order_method_id":
                 int.tryParse(selectedMethodId.toString()) ?? 0,
             "subtotal_amount": subTotal,
-            "discount_amount": subTotal - totalPayment,
+            "discount_amount": subTotal - totalPayment + nominalVoucher,
             "tax_amount": 0.00,
-            "total_amount": totalPayment,
+            "total_amount": totalPayment - nominalVoucher,
             "pay_amount": finalPayment,
             "voucher_barcodes": barcodeList,
             "is_cash": 1,
@@ -297,10 +297,10 @@ class _PaymentPageState extends State<PaymentPage> {
             "pos_order_method_id":
                 int.tryParse(selectedMethodId.toString()) ?? 0,
             "subtotal_amount": subTotal,
-            "discount_amount": subTotal - totalPayment,
+            "discount_amount": subTotal - totalPayment + nominalVoucher,
             "tax_amount": 0.00,
-            "total_amount": totalPayment,
-            "pay_amount": totalPayment,
+            "total_amount": totalPayment - nominalVoucher,
+            "pay_amount": totalPayment - nominalVoucher,
             "voucher_barcodes": barcodeList,
             "is_cash": 0,
           };
@@ -336,10 +336,10 @@ class _PaymentPageState extends State<PaymentPage> {
           "pos_payment_method_id": 11,
           "pos_order_method_id": int.tryParse(selectedMethodId.toString()) ?? 0,
           "subtotal_amount": subTotal,
-          "discount_amount": subTotal - totalPayment,
+          "discount_amount": subTotal - totalPayment + nominalVoucher,
           "tax_amount": 0.00,
-          "total_amount": totalPayment,
-          "pay_amount": totalPayment,
+          "total_amount": totalPayment - nominalVoucher,
+          "pay_amount": totalPayment - nominalVoucher,
           "is_cash": 1,
           "voucher_barcodes": barcodeList,
           "keterangan": _keteranganCompliment.text,
@@ -1632,7 +1632,7 @@ class _PaymentPageState extends State<PaymentPage> {
   }
 
   Widget tunaiSection() {
-    bool isValidCustom = customAmount >= totalPayment;
+    bool isValidCustom = customAmount >= totalPayment - nominalVoucher;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

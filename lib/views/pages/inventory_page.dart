@@ -15,6 +15,7 @@ import 'package:pos_panglima_app/utils/snackbar_util.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:intl/intl.dart';
 import 'package:pos_panglima_app/views/pages/reception_inventory_page.dart';
+import 'package:pos_panglima_app/views/pages/reject_detail_page.dart';
 import 'package:pos_panglima_app/views/pages/stock_opname_page.dart';
 
 class InventoryPage extends StatefulWidget {
@@ -282,6 +283,11 @@ class _InventoryPageState extends State<InventoryPage> {
                         icon: Icons.drive_file_rename_outline_rounded,
                         label: 'Stock Opname',
                       ),
+                      // _buildMenuItem(
+                      //   index: 3,
+                      //   icon: Icons.assignment_late_outlined,
+                      //   label: 'Reject',
+                      // ),
                     ],
                   ),
                 ),
@@ -299,6 +305,8 @@ class _InventoryPageState extends State<InventoryPage> {
                 return suratJalan();
               } else if (value == 2) {
                 return stockOpname();
+              } else if (value == 3) {
+                return reject();
               } else {
                 return const SizedBox.shrink();
               }
@@ -1178,6 +1186,264 @@ class _InventoryPageState extends State<InventoryPage> {
               ),
             );
           },
+        ),
+      ],
+    );
+  }
+
+  final List<Map<String, dynamic>> _dummyRejectList = [
+    {
+      'id': 1,
+      'document_number': 'REJ-2025-0001',
+      'date': '2025-05-01',
+      'status': 'pending',
+      'outlet_hub_name': 'Outlet Pusat',
+      'total_items': 3,
+      'remarks': 'Barang tidak sesuai pesanan',
+    },
+    {
+      'id': 2,
+      'document_number': 'REJ-2025-0002',
+      'date': '2025-05-02',
+      'status': 'submitted',
+      'outlet_hub_name': 'Outlet Cabang A',
+      'total_items': 1,
+      'remarks': '',
+    },
+    {
+      'id': 3,
+      'document_number': 'REJ-2025-0003',
+      'date': '2025-05-03',
+      'status': 'pending',
+      'outlet_hub_name': 'Outlet Cabang B',
+      'total_items': 5,
+      'remarks': 'Kemasan rusak saat pengiriman',
+    },
+  ];
+
+  Widget reject() {
+    return Column(
+      children: [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            border: Border(
+              bottom: BorderSide(color: Colors.grey.shade200, width: 1),
+              left: const BorderSide(color: AppColors.primary, width: 5),
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Reject',
+                    style: TextStyle(
+                      fontSize: 18.0,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
+                    ),
+                  ),
+                  Text(
+                    'Daftar Item Reject',
+                    style: TextStyle(fontSize: 12.0, color: Colors.grey[500]),
+                  ),
+                ],
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => RejectDetailPage(outletName: outletName),
+                    ),
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  backgroundColor: AppColors.primary,
+                  side: const BorderSide(color: AppColors.primary, width: 1.5),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 12,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text('Post Reject +'),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: _dummyRejectList.isEmpty
+              ? Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.assignment_late_outlined,
+                      size: 80,
+                      color: Colors.grey[300],
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Belum Ada Reject',
+                      style: TextStyle(color: Colors.grey[600], fontSize: 16),
+                    ),
+                  ],
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: _dummyRejectList.length,
+                  itemBuilder: (context, index) {
+                    final reject = _dummyRejectList[index];
+                    final rawStatus = (reject['status'] ?? 'pending')
+                        .toString();
+                    final isPending = rawStatus.toLowerCase() == 'pending';
+                    final dateStr = reject['date']?.toString() ?? '';
+                    final dateFormatted = dateStr.isNotEmpty
+                        ? DateFormat(
+                            'dd MMM yyyy',
+                            'id_ID',
+                          ).format(DateTime.tryParse(dateStr) ?? DateTime.now())
+                        : '-';
+                    final totalItems = reject['total_items'] ?? 0;
+
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(15),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.05),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(15),
+                          onTap: null,
+                          child: Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        reject['document_number']?.toString() ??
+                                            '-',
+                                        style: const TextStyle(
+                                          fontSize: 16.0,
+                                          fontWeight: FontWeight.bold,
+                                          color: AppColors.primary,
+                                        ),
+                                      ),
+                                    ),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 10,
+                                        vertical: 4,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: isPending
+                                            ? Colors.orange.shade50
+                                            : Colors.green.shade50,
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Text(
+                                        rawStatus.toUpperCase(),
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                          color: isPending
+                                              ? Colors.orange
+                                              : Colors.green,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const Divider(height: 20),
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  children: [
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          _buildDetailRow(
+                                            'Tanggal',
+                                            dateFormatted,
+                                          ),
+                                          const SizedBox(height: 6),
+                                          _buildDetailRow(
+                                            'Outlet',
+                                            reject['outlet_hub_name']
+                                                    ?.toString() ??
+                                                '-',
+                                          ),
+                                          if ((reject['remarks']?.toString() ??
+                                                  '')
+                                              .isNotEmpty) ...[
+                                            const SizedBox(height: 6),
+                                            _buildDetailRow(
+                                              'Keterangan',
+                                              reject['remarks'].toString(),
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    _buildStatChip(
+                                      'Items',
+                                      totalItems.toString(),
+                                      Colors.red,
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 12),
+                                const Row(
+                                  mainAxisAlignment: MainAxisAlignment.end,
+                                  children: [
+                                    Text(
+                                      'Lihat Detail',
+                                      style: TextStyle(
+                                        color: AppColors.primaryDarkest,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                    SizedBox(width: 4),
+                                    Icon(
+                                      Icons.arrow_forward_rounded,
+                                      size: 16,
+                                      color: AppColors.primaryDarkest,
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
         ),
       ],
     );

@@ -16,7 +16,12 @@ import 'package:flutter/services.dart' show rootBundle, ByteData, Uint8List;
 class BluetoothPrinterService {
   static final BlueThermalPrinter bluetooth = BlueThermalPrinter.instance;
 
-  static BluetoothDevice? connectedPrinter;
+  static final ValueNotifier<BluetoothDevice?> connectedPrinterNotifier =
+      ValueNotifier<BluetoothDevice?>(null);
+  static BluetoothDevice? get connectedPrinter =>
+      connectedPrinterNotifier.value;
+  static set connectedPrinter(BluetoothDevice? device) =>
+      connectedPrinterNotifier.value = device;
   static BluetoothDevice? lastConnectedPrinter;
   // ignore: cancel_subscriptions
   static StreamSubscription? _stateSubscription;
