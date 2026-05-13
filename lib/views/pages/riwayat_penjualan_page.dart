@@ -98,6 +98,7 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
     } catch (e, stack) {
       CrashReporter.report(e, stack, reason: 'riwayat_penjualan_page._fetchOrders');
       if (!mounted) return;
+      setState(() => isLoadingOrdersList = false);
       SnackbarUtil.show(
         context,
         title: "Gagal memuat riwayat penjualan",
@@ -137,7 +138,11 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
       final response = await authService.getProfile();
       final data = response.data['data'];
       final newUserId = data?['userid'];
-      await _fetchOrders(newUserId);
+      if (newUserId != null) {
+        await _fetchOrders(newUserId);
+      } else {
+        setState(() => isLoadingOrdersList = false);
+      }
       if (!mounted) return;
       setState(() {
         userId = data?['userid'];
@@ -279,8 +284,12 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
                           child: SkeletonLoader.listHistorySkeleton(
                             timeout: const Duration(seconds: 10),
                             onRetry: () {
-                              setState(() => isLoadingOrdersList = true);
-                              _fetchOrders(userId!);
+                              if (userId != null) {
+                                setState(() => isLoadingOrdersList = true);
+                                _fetchOrders(userId!);
+                              } else {
+                                _fetchProfile();
+                              }
                             },
                           ),
                         )

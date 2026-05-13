@@ -88,7 +88,11 @@ class _PesananBaruPageState extends State<PesananBaruPage>
       await cartService.minusCart(id);
       loadCart();
     } catch (e, stack) {
-      CrashReporter.report(e, stack, reason: 'pesanan_baru_page._decreaseQuantity');
+      CrashReporter.report(
+        e,
+        stack,
+        reason: 'pesanan_baru_page._decreaseQuantity',
+      );
       if (!mounted) return;
       loadCart();
       SnackbarUtil.show(
@@ -138,7 +142,11 @@ class _PesananBaruPageState extends State<PesananBaruPage>
     try {
       await cartService.deleteCart(id);
     } catch (e, stack) {
-      CrashReporter.report(e, stack, reason: 'pesanan_baru_page._deletedCartItem');
+      CrashReporter.report(
+        e,
+        stack,
+        reason: 'pesanan_baru_page._deletedCartItem',
+      );
       if (!mounted) return;
       SnackbarUtil.show(
         context,
@@ -391,11 +399,7 @@ class _PesananBaruPageState extends State<PesananBaruPage>
           hasProps) {
         _showProductModal(context, foundProduct);
       } else {
-        savedToCart(
-          foundProduct['id'],
-          foundProduct['price'] ?? 0,
-          loadCart,
-        );
+        savedToCart(foundProduct['id'], foundProduct['price'] ?? 0, loadCart);
         if (mounted) {
           SnackbarUtil.show(
             context,
@@ -445,6 +449,15 @@ class _PesananBaruPageState extends State<PesananBaruPage>
   }
 
   void _showUpdateModal(BuildContext context, Map<String, dynamic> item) {
+    final allProducts = menuList.expand<Map>(
+      (cat) => (cat['data'] as List).cast<Map>(),
+    );
+    final menuItem = allProducts.firstWhere(
+      (p) => p['id'] == item['pos_menus_id'],
+      orElse: () => {},
+    );
+    final List? availableProps = menuItem['props'] as List?;
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -467,6 +480,7 @@ class _PesananBaruPageState extends State<PesananBaruPage>
           imageUrl: item['image_url'],
 
           posCartProps: item['pos_cart_props'] ?? [],
+          availableProps: availableProps,
 
           // Logika pengecekan koleksi (boolean)
           collection:

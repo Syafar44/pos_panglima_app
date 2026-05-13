@@ -25,6 +25,7 @@ class UpdateProductModalWidget extends StatefulWidget {
     required this.discountVal,
     required this.total,
     this.posCartProps,
+    this.availableProps,
     this.maxQty,
     required this.collection,
     required this.onSaved,
@@ -44,6 +45,7 @@ class UpdateProductModalWidget extends StatefulWidget {
   final int total;
   final bool collection;
   final List? posCartProps;
+  final List? availableProps;
   final int? maxQty;
   final dynamic onSaved;
   final String? imageUrl;
@@ -112,27 +114,21 @@ class _UpdateProductModalWidgetState extends State<UpdateProductModalWidget> {
   }
 
   void onTapVariant(Map<String, dynamic> item) {
-    final code = item["pos_menus_id"]; // ← fix (bukan item["id"])
+    final id = item["id"];
 
     setState(() {
-      selectedProps[code] = (selectedProps[code] ?? 0) + 1;
-      mergedProps = widget.posCartProps!.map((e) {
-        final c = e['pos_menus_id']; // ← fix
-        return {"pos_menus_id": c, "quantity": selectedProps[c] ?? 0};
-      }).toList();
+      selectedProps[id] = (selectedProps[id] ?? 0) + 1;
     });
   }
 
   void resetVariants() {
     setState(() {
       selectedProps.clear();
-      mergedProps = widget.posCartProps!.map((e) {
-        return {"pos_menus_id": e["pos_menus_id"], "quantity": 0}; // ← fix
-      }).toList();
     });
   }
 
   late List<Map<String, dynamic>> mergedProps;
+  late List<Map<String, dynamic>> _renderProps;
 
   @override
   void initState() {
@@ -158,8 +154,23 @@ class _UpdateProductModalWidgetState extends State<UpdateProductModalWidget> {
       }
     }
 
-    mergedProps = (widget.posCartProps ?? []).map((item) {
-      final id = item['pos_menus_id'];
+    if (widget.availableProps != null && widget.availableProps!.isNotEmpty) {
+      _renderProps = widget.availableProps!.map<Map<String, dynamic>>((e) {
+        final m = e as Map;
+        return {"id": m["id"] as int, "title": (m["title"] ?? '').toString()};
+      }).toList();
+    } else {
+      _renderProps = (widget.posCartProps ?? []).map<Map<String, dynamic>>((e) {
+        final m = e as Map;
+        return {
+          "id": m["pos_menus_id"] as int,
+          "title": (m["pos_menus_name"] ?? '').toString(),
+        };
+      }).toList();
+    }
+
+    mergedProps = _renderProps.map((item) {
+      final id = item['id'];
       final qty = selectedProps[id] ?? 0;
       return {"pos_menus_id": id, "quantity": qty};
     }).toList();
@@ -169,9 +180,14 @@ class _UpdateProductModalWidgetState extends State<UpdateProductModalWidget> {
     if (isSubmitting) return;
     setState(() => isSubmitting = true);
 
-    mergedProps = selectedProps.entries.map((entry) {
-      return {"pos_menus_id": entry.key, "quantity": entry.value};
-    }).toList();
+    mergedProps = _renderProps
+        .map((item) {
+          final id = item['id'];
+          final qty = selectedProps[id] ?? 0;
+          return {"pos_menus_id": id, "quantity": qty};
+        })
+        .where((m) => (m["quantity"] as int) > 0)
+        .toList();
 
     final int discount = int.tryParse(diskonController.text) ?? 0;
     final int subtotal = widget.price * quantity;
@@ -522,7 +538,7 @@ class _UpdateProductModalWidgetState extends State<UpdateProductModalWidget> {
                     ),
                     if (widget.maxQty != null &&
                         (widget.maxQty ?? 0) > 0 &&
-                        widget.posCartProps != null)
+                        _renderProps.isNotEmpty)
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -575,8 +591,8 @@ class _UpdateProductModalWidgetState extends State<UpdateProductModalWidget> {
                           Wrap(
                             spacing: 12,
                             runSpacing: 12,
-                            children: widget.posCartProps!.map((e) {
-                              final id = e["pos_menus_id"];
+                            children: _renderProps.map((e) {
+                              final id = e["id"];
                               final int propsQuantity = selectedProps[id] ?? 0;
                               final bool isSelected = propsQuantity > 0;
 
@@ -618,7 +634,7 @@ class _UpdateProductModalWidgetState extends State<UpdateProductModalWidget> {
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
                                       Text(
-                                        e["pos_menus_name"],
+                                        e["title"],
                                         style: TextStyle(
                                           color: isSelected
                                               ? Colors.white

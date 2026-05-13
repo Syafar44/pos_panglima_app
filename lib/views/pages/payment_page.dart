@@ -71,8 +71,14 @@ class _PaymentPageState extends State<PaymentPage> {
   final TextEditingController _keteranganCompliment = TextEditingController();
   // final FocusNode _voucherFocusNode = FocusNode();
 
-  int roundToNearestTenThousand(int num) {
-    return ((num + 9999) ~/ 10000) * 10000;
+  int roundToCashDenomination(int num) {
+    if (num <= 0) return 0;
+    if (num < 5000) return 5000;
+    if (num < 10000) return 10000;
+    if (num < 20000) return 20000;
+    if (num < 50000) return 50000;
+    if (num < 100000) return 100000;
+    return ((num ~/ 50000) + 1) * 50000;
   }
 
   String selectedPayment = "exact";
@@ -85,7 +91,7 @@ class _PaymentPageState extends State<PaymentPage> {
 
   int get exactAmount => totalPayment;
   int get roundedAmount =>
-      roundToNearestTenThousand(totalPayment - nominalVoucher);
+      roundToCashDenomination(totalPayment - nominalVoucher);
 
   @override
   void initState() {
@@ -1585,7 +1591,14 @@ class _PaymentPageState extends State<PaymentPage> {
                             height:
                                 45, // Memberikan tinggi yang konsisten agar mudah ditekan (touch-friendly)
                             child: ElevatedButton(
-                              onPressed: isLoading ? null : handlePayment,
+                              onPressed:
+                                  (isLoading ||
+                                      (selectedTab == 0 &&
+                                          selectedPayment == "custom" &&
+                                          customAmount <
+                                              totalPayment - nominalVoucher))
+                                  ? null
+                                  : handlePayment,
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: AppColors.primarySelected,
                                 disabledBackgroundColor: Colors

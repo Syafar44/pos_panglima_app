@@ -60,9 +60,20 @@ class _PengaturanPageState extends State<PengaturanPage> {
           });
         });
 
-    scanDevices().then((_) {
-      BluetoothPrinterService.loadLastPrinter();
+    _initialScan();
+  }
+
+  Future<void> _initialScan() async {
+    final isOn = await BluetoothPrinterService.bluetooth.isOn ?? false;
+    if (!isOn) return;
+    setState(() => isScanning = true);
+    final foundDevices = await BluetoothPrinterService.scanPrinters();
+    if (!mounted) return;
+    setState(() {
+      isScanning = false;
+      devices = foundDevices;
     });
+    await BluetoothPrinterService.loadLastPrinter();
   }
 
   void _onPrinterChanged() {
@@ -578,8 +589,6 @@ class _PengaturanPageState extends State<PengaturanPage> {
                     ],
                   ),
                 ),
-
-                // BAGIAN BAWAH: VERSIONING
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 24.0),
                   child: Column(

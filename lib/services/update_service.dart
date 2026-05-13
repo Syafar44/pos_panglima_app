@@ -8,6 +8,11 @@ class UpdateService {
     try {
       return await InAppUpdate.checkForUpdate();
     } catch (e, stack) {
+      // Error -10: TASK_FAILURE (App not owned/not from Play Store)
+      // Ini normal saat development (run dari laptop/APK manual).
+      if (e.toString().contains('-10') || e.toString().contains('TASK_FAILURE')) {
+        return null;
+      }
       CrashReporter.report(e, stack, reason: 'update_service.check');
       return null;
     }

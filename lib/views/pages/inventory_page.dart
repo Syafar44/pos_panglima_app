@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:pos_panglima_app/data/notifiers.dart';
+import 'package:pos_panglima_app/services/reject_service.dart';
 import 'package:pos_panglima_app/utils/app_colors.dart';
 import 'package:number_pagination/number_pagination.dart';
 import 'package:pos_panglima_app/services/auth_service.dart';
@@ -30,6 +31,7 @@ class _InventoryPageState extends State<InventoryPage> {
   late final AuthService authService;
   late final InventoryService inventoryService;
   late final StockOpnameService stockOpnameService;
+  late final RejectService rejectService;
   String? customerId;
   String outletName = '';
   bool isLoadingCustomerId = true;
@@ -46,12 +48,19 @@ class _InventoryPageState extends State<InventoryPage> {
   int soPageNumber = 1;
   Map<String, dynamic>? soPaginationInfo;
 
+  List rejectList = [];
+  bool isLoadingReject = false;
+  bool rejectIsEmpty = false;
+  int rejectPageNumber = 1;
+  Map<String, dynamic>? rejectPaginationInfo;
+
   @override
   void initState() {
     super.initState();
     authService = AuthService(apiClient.dio);
     inventoryService = InventoryService(apiClient.dio);
     stockOpnameService = StockOpnameService(apiClient.dio);
+    rejectService = RejectService(apiClient.dio);
     initializeDateFormatting('id_ID', null);
     getCustomerId();
   }
@@ -76,6 +85,7 @@ class _InventoryPageState extends State<InventoryPage> {
       });
       if (isBackSO.value == false) {
         fetchListSO();
+        fetchListReject();
       }
     } catch (e, stack) {
       CrashReporter.report(e, stack, reason: 'inventory_page.getCustomerId');
@@ -155,6 +165,72 @@ class _InventoryPageState extends State<InventoryPage> {
         context,
         title: 'Gagal memuat Stock Opname',
         message: 'Terjadi kendala saat mengambil data stock opname.',
+        status: SnackBarStatus.error,
+      );
+    }
+  }
+
+  Future<void> fetchListReject() async {
+    if (!mounted) return;
+    setState(() => isLoadingReject = true);
+    try {
+      final response = await rejectService.getListReject(
+        int.tryParse(customerId?.toString() ?? '') ?? 0,
+        page: rejectPageNumber,
+        limit: 10,
+      );
+      List list = [];
+      Map<String, dynamic>? pagination;
+      if (response.data['data'] is List) {
+        list = response.data['data'];
+        pagination = response.data['metadata'] ?? response.data['pagination'];
+      } else if (response.data['data'] is Map) {
+        list = response.data['data']['data'] ?? [];
+        pagination =
+            response.data['data']['metadata'] ??
+            response.data['data']['pagination'];
+      }
+      if (!mounted) return;
+      setState(() {
+        rejectList = list;
+        isLoadingReject = false;
+        rejectIsEmpty = list.isEmpty;
+        rejectPaginationInfo = pagination;
+      });
+    } on DioException catch (e, stack) {
+      if (e.response?.statusCode == 404) {
+        if (!mounted) return;
+        setState(() {
+          rejectList = [];
+          isLoadingReject = false;
+          rejectIsEmpty = true;
+          rejectPaginationInfo = null;
+        });
+        return;
+      }
+      CrashReporter.report(e, stack, reason: 'inventory_page.fetchListReject');
+      if (!mounted) return;
+      setState(() {
+        isLoadingReject = false;
+        rejectIsEmpty = true;
+      });
+      SnackbarUtil.show(
+        context,
+        title: 'Gagal memuat Reject',
+        message: 'Terjadi kendala saat mengambil data reject.',
+        status: SnackBarStatus.error,
+      );
+    } catch (e, stack) {
+      CrashReporter.report(e, stack, reason: 'inventory_page.fetchListReject');
+      if (!mounted) return;
+      setState(() {
+        isLoadingReject = false;
+        rejectIsEmpty = true;
+      });
+      SnackbarUtil.show(
+        context,
+        title: 'Gagal memuat Reject',
+        message: 'Terjadi kendala saat mengambil data reject.',
         status: SnackBarStatus.error,
       );
     }
@@ -283,11 +359,11 @@ class _InventoryPageState extends State<InventoryPage> {
                         icon: Icons.drive_file_rename_outline_rounded,
                         label: 'Stock Opname',
                       ),
-                      // _buildMenuItem(
-                      //   index: 3,
-                      //   icon: Icons.assignment_late_outlined,
-                      //   label: 'Reject',
-                      // ),
+                      _buildMenuItem(
+                        index: 3,
+                        icon: Icons.assignment_late_outlined,
+                        label: 'Reject',
+                      ),
                     ],
                   ),
                 ),
@@ -1191,35 +1267,301 @@ class _InventoryPageState extends State<InventoryPage> {
     );
   }
 
-  final List<Map<String, dynamic>> _dummyRejectList = [
-    {
-      'id': 1,
-      'document_number': 'REJ-2025-0001',
-      'date': '2025-05-01',
-      'status': 'pending',
-      'outlet_hub_name': 'Outlet Pusat',
-      'total_items': 3,
-      'remarks': 'Barang tidak sesuai pesanan',
-    },
-    {
-      'id': 2,
-      'document_number': 'REJ-2025-0002',
-      'date': '2025-05-02',
-      'status': 'submitted',
-      'outlet_hub_name': 'Outlet Cabang A',
-      'total_items': 1,
-      'remarks': '',
-    },
-    {
-      'id': 3,
-      'document_number': 'REJ-2025-0003',
-      'date': '2025-05-03',
-      'status': 'pending',
-      'outlet_hub_name': 'Outlet Cabang B',
-      'total_items': 5,
-      'remarks': 'Kemasan rusak saat pengiriman',
-    },
-  ];
+  void _showRejectModal() {
+    DateTime selectedDate = DateTime.now();
+    final prefix = 'Daily Reject${outletName.isNotEmpty ? ' $outletName' : ''}';
+    final keteranganCtrl = TextEditingController(text: prefix);
+    final pageContext = context;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        bool isSubmitting = false;
+
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            Future<void> submit() async {
+              setModalState(() => isSubmitting = true);
+              try {
+                final payload = {
+                  'tgl_reject': DateFormat('yyyy-MM-dd').format(selectedDate),
+                  'hashtag_type': "REJECT",
+                  'customer_id': int.tryParse(customerId?.toString() ?? ''),
+                  'raw_text': keteranganCtrl.text.trim(),
+                };
+                final response = await rejectService.postReject(payload);
+                final newId = (response.data['data']['id'] as num).toInt();
+                if (!dialogContext.mounted) return;
+                SnackbarUtil.show(
+                  pageContext,
+                  title: 'Reject Dibuat',
+                  message: 'Draft stock opname berhasil disimpan.',
+                  status: SnackBarStatus.success,
+                );
+                await Navigator.push(
+                  pageContext,
+                  MaterialPageRoute(
+                    builder: (_) => RejectDetailPage(id: newId),
+                  ),
+                );
+                if (mounted) fetchListReject();
+              } catch (e, stack) {
+                CrashReporter.report(
+                  e,
+                  stack,
+                  reason: 'inventory_page.postReject',
+                );
+                if (!context.mounted) return;
+                SnackbarUtil.show(
+                  context,
+                  title: 'Gagal Membuat Reject',
+                  message: 'Terjadi kendala saat membuat reject. Coba kembali.',
+                  status: SnackBarStatus.error,
+                );
+              } finally {
+                if (context.mounted) setModalState(() => isSubmitting = false);
+              }
+            }
+
+            final today = DateTime(
+              DateTime.now().year,
+              DateTime.now().month,
+              DateTime.now().day,
+            );
+            final dateLabel = DateFormat(
+              'dd MMM yyyy',
+              'id_ID',
+            ).format(selectedDate);
+
+            Future<void> pickDate() async {
+              final picked = await showDatePicker(
+                context: context,
+                initialDate: selectedDate.isBefore(today)
+                    ? today
+                    : selectedDate,
+                firstDate: today,
+                lastDate: today.add(const Duration(days: 365)),
+                helpText: 'Pilih Tanggal Stock Opname',
+                builder: (context, child) => Theme(
+                  data: Theme.of(context).copyWith(
+                    colorScheme: const ColorScheme.light(
+                      primary: AppColors.primary,
+                      onPrimary: Colors.white,
+                      onSurface: Color(0xFF2D3436),
+                    ),
+                  ),
+                  child: child!,
+                ),
+              );
+              if (picked != null) setModalState(() => selectedDate = picked);
+            }
+
+            return Dialog(
+              backgroundColor: Colors.white,
+              insetPadding: const EdgeInsets.symmetric(
+                horizontal: 24,
+                vertical: 24,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 480),
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: AppColors.primaryLight,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const Icon(
+                              Icons.drive_file_rename_outline_rounded,
+                              color: AppColors.primary,
+                              size: 20,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          const Expanded(
+                            child: Text(
+                              'Buat Reject',
+                              style: TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black87,
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: () => Navigator.pop(context),
+                            icon: const Icon(Icons.close_rounded),
+                            visualDensity: VisualDensity.compact,
+                            color: Colors.grey,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Pencatatan fisik stock barang harian',
+                        style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+                      ),
+                      const Divider(height: 28),
+                      const Text(
+                        'Tanggal Reject',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.black87,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      InkWell(
+                        onTap: pickDate,
+                        borderRadius: BorderRadius.circular(10),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 13,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade50,
+                            border: Border.all(color: Colors.grey.shade300),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.calendar_today_rounded,
+                                size: 18,
+                                color: AppColors.primary,
+                              ),
+                              const SizedBox(width: 12),
+                              Text(
+                                dateLabel,
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                              const Spacer(),
+                              Icon(
+                                Icons.arrow_drop_down_rounded,
+                                color: Colors.grey[600],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Tidak dapat memilih tanggal sebelum hari ini.',
+                        style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+                      ),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'Keterangan',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.black87,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: keteranganCtrl,
+                        maxLines: 3,
+                        style: const TextStyle(fontSize: 14),
+                        decoration: InputDecoration(
+                          hintText: 'Tambahkan keterangan (opsional)',
+                          hintStyle: TextStyle(
+                            color: Colors.grey[400],
+                            fontSize: 13,
+                          ),
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 12,
+                          ),
+                          filled: true,
+                          fillColor: Colors.grey.shade50,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(color: Colors.grey.shade300),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(color: Colors.grey.shade300),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: const BorderSide(
+                              color: AppColors.primary,
+                              width: 1.5,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: isSubmitting ? null : submit,
+                              icon: isSubmitting
+                                  ? const SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: AppColors.primary,
+                                      ),
+                                    )
+                                  : const Icon(
+                                      Icons.save_outlined,
+                                      color: AppColors.primary,
+                                      size: 18,
+                                    ),
+                              label: Text(
+                                isSubmitting ? 'Membuat...' : 'Buat Draft',
+                                style: const TextStyle(
+                                  color: AppColors.primary,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              style: OutlinedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 13,
+                                ),
+                                side: const BorderSide(
+                                  color: AppColors.primary,
+                                  width: 1.5,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    ).whenComplete(keteranganCtrl.dispose);
+  }
 
   Widget reject() {
     return Column(
@@ -1255,14 +1597,7 @@ class _InventoryPageState extends State<InventoryPage> {
                 ],
               ),
               ElevatedButton(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => RejectDetailPage(outletName: outletName),
-                    ),
-                  );
-                },
+                onPressed: _showRejectModal,
                 style: ElevatedButton.styleFrom(
                   foregroundColor: Colors.white,
                   backgroundColor: AppColors.primary,
@@ -1281,7 +1616,15 @@ class _InventoryPageState extends State<InventoryPage> {
           ),
         ),
         Expanded(
-          child: _dummyRejectList.isEmpty
+          child: isLoadingReject || isLoadingCustomerId
+              ? Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: SkeletonLoader.detailInventorySkeleton(
+                    timeout: const Duration(seconds: 10),
+                    onRetry: fetchListReject,
+                  ),
+                )
+              : rejectIsEmpty || rejectList.isEmpty
               ? Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -1299,20 +1642,33 @@ class _InventoryPageState extends State<InventoryPage> {
                 )
               : ListView.builder(
                   padding: const EdgeInsets.all(16),
-                  itemCount: _dummyRejectList.length,
+                  itemCount: rejectList.length,
                   itemBuilder: (context, index) {
-                    final reject = _dummyRejectList[index];
-                    final rawStatus = (reject['status'] ?? 'pending')
-                        .toString();
-                    final isPending = rawStatus.toLowerCase() == 'pending';
-                    final dateStr = reject['date']?.toString() ?? '';
+                    final reject = rejectList[index];
+                    final approveStatus = reject['approve'];
+                    final isPending = approveStatus == null;
+                    final isApproved =
+                        approveStatus == 1 || approveStatus == true;
+                    final statusLabel = isPending
+                        ? 'DRAFT'
+                        : (isApproved ? 'APPROVED' : 'PENDING');
+                    final statusColor = isPending
+                        ? AppColors.textDark
+                        : (isApproved ? Colors.green : Colors.orange);
+                    final statusBg = isPending
+                        ? Colors.grey.shade50
+                        : (isApproved
+                              ? Colors.green.shade50
+                              : Colors.orange.shade50);
+                    final dateStr = reject['tgl_reject']?.toString() ?? '';
                     final dateFormatted = dateStr.isNotEmpty
                         ? DateFormat(
                             'dd MMM yyyy',
                             'id_ID',
                           ).format(DateTime.tryParse(dateStr) ?? DateTime.now())
                         : '-';
-                    final totalItems = reject['total_items'] ?? 0;
+                    final totalItems = reject['total_lines'] ?? 0;
+                    final docNumber = 'REJ-${reject['id']}';
 
                     return Container(
                       margin: const EdgeInsets.only(bottom: 16),
@@ -1331,7 +1687,17 @@ class _InventoryPageState extends State<InventoryPage> {
                         color: Colors.transparent,
                         child: InkWell(
                           borderRadius: BorderRadius.circular(15),
-                          onTap: null,
+                          onTap: () async {
+                            await Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => RejectDetailPage(
+                                  id: (reject['id'] as num).toInt(),
+                                ),
+                              ),
+                            );
+                            if (mounted) fetchListReject();
+                          },
                           child: Padding(
                             padding: const EdgeInsets.all(16.0),
                             child: Column(
@@ -1343,8 +1709,7 @@ class _InventoryPageState extends State<InventoryPage> {
                                   children: [
                                     Expanded(
                                       child: Text(
-                                        reject['document_number']?.toString() ??
-                                            '-',
+                                        docNumber,
                                         style: const TextStyle(
                                           fontSize: 16.0,
                                           fontWeight: FontWeight.bold,
@@ -1358,19 +1723,15 @@ class _InventoryPageState extends State<InventoryPage> {
                                         vertical: 4,
                                       ),
                                       decoration: BoxDecoration(
-                                        color: isPending
-                                            ? Colors.orange.shade50
-                                            : Colors.green.shade50,
+                                        color: statusBg,
                                         borderRadius: BorderRadius.circular(8),
                                       ),
                                       child: Text(
-                                        rawStatus.toUpperCase(),
+                                        statusLabel,
                                         style: TextStyle(
                                           fontSize: 10,
                                           fontWeight: FontWeight.bold,
-                                          color: isPending
-                                              ? Colors.orange
-                                              : Colors.green,
+                                          color: statusColor,
                                         ),
                                       ),
                                     ),
@@ -1392,17 +1753,17 @@ class _InventoryPageState extends State<InventoryPage> {
                                           const SizedBox(height: 6),
                                           _buildDetailRow(
                                             'Outlet',
-                                            reject['outlet_hub_name']
+                                            reject['customer_name']
                                                     ?.toString() ??
                                                 '-',
                                           ),
-                                          if ((reject['remarks']?.toString() ??
+                                          if ((reject['raw_text']?.toString() ??
                                                   '')
                                               .isNotEmpty) ...[
                                             const SizedBox(height: 6),
                                             _buildDetailRow(
                                               'Keterangan',
-                                              reject['remarks'].toString(),
+                                              reject['raw_text'].toString(),
                                             ),
                                           ],
                                         ],
@@ -1445,6 +1806,61 @@ class _InventoryPageState extends State<InventoryPage> {
                   },
                 ),
         ),
+        Builder(
+          builder: (context) {
+            int totalPages = 1;
+            if (rejectPaginationInfo != null) {
+              if (rejectPaginationInfo!['total_page'] != null) {
+                totalPages = (rejectPaginationInfo!['total_page'] as num)
+                    .toInt();
+              } else if (rejectPaginationInfo!['total_pages'] != null) {
+                totalPages = (rejectPaginationInfo!['total_pages'] as num)
+                    .toInt();
+              } else if (rejectPaginationInfo!['last_page'] != null) {
+                totalPages = (rejectPaginationInfo!['last_page'] as num)
+                    .toInt();
+              } else if (rejectPaginationInfo!['total'] != null) {
+                int total = (rejectPaginationInfo!['total'] as num).toInt();
+                int limit =
+                    (rejectPaginationInfo!['limit'] as num?)?.toInt() ?? 10;
+                totalPages = (total / limit).ceil();
+              }
+            }
+            if (totalPages <= 1) return const SizedBox.shrink();
+            return Container(
+              padding: const EdgeInsets.symmetric(
+                vertical: 2.0,
+                horizontal: 16.0,
+              ),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                border: Border(top: BorderSide(color: Colors.grey[200]!)),
+              ),
+              child: NumberPagination(
+                onPageChanged: (int pageNumber) {
+                  setState(() {
+                    rejectPageNumber = pageNumber;
+                    isLoadingReject = true;
+                  });
+                  fetchListReject();
+                },
+                visiblePagesCount: totalPages < 3 ? totalPages : 3,
+                totalPages: totalPages,
+                currentPage: rejectPageNumber.clamp(1, totalPages),
+                buttonRadius: 12,
+                selectedButtonColor: AppColors.primarySelected,
+                selectedNumberColor: Colors.black,
+                unSelectedButtonColor: Colors.grey[100]!,
+                unSelectedNumberColor: Colors.grey[700]!,
+                numberButtonSize: const Size(35, 35),
+                controlButtonSize: const Size(35, 35),
+                fontSize: 14,
+                sectionSpacing: 5,
+                navigationButtonSpacing: 0,
+              ),
+            );
+          },
+        ),
       ],
     );
   }
@@ -1467,6 +1883,12 @@ class _InventoryPageState extends State<InventoryPage> {
               !isLoadingSO &&
               !isLoadingCustomerId) {
             fetchListSO();
+          }
+          if (index == 3 &&
+              rejectList.isEmpty &&
+              !isLoadingReject &&
+              !isLoadingCustomerId) {
+            fetchListReject();
           }
         },
         child: Container(
