@@ -203,9 +203,8 @@ class _LaporanPageState extends State<LaporanPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // _buildPeriodFilter(),
         Padding(
-          padding: const EdgeInsets.all(20.0),
+          padding: const EdgeInsets.only(top: 20.0, left: 20, right: 20),
           child: Row(
             children: [
               _buildSummaryCard(
@@ -220,6 +219,19 @@ class _LaporanPageState extends State<LaporanPage> {
                 value: '$jumlahTransaksi',
                 icon: Icons.confirmation_number_rounded,
                 color: Colors.blue[700]!,
+              ),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Row(
+            children: [
+              _buildSummaryCard(
+                title: 'Penerimaan Shift Sebelumnya',
+                value: convertIDR(2934589),
+                icon: Icons.account_balance_wallet_rounded,
+                color: AppColors.accentDark,
               ),
             ],
           ),

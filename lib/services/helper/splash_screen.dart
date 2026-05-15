@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:in_app_update/in_app_update.dart';
 import 'package:safe_device/safe_device.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:pos_panglima_app/services/helper/dio_client.dart';
 import 'dart:convert';
+import 'package:pos_panglima_app/services/update_service.dart';
+import 'package:pos_panglima_app/utils/app_colors.dart';
 import 'package:pos_panglima_app/utils/crash_reporter.dart';
 import 'package:pos_panglima_app/views/pages/device_locked_screen.dart';
 import 'package:pos_panglima_app/services/storage/shift_storage_service.dart';
-import 'package:pos_panglima_app/utils/app_colors.dart';
 import 'package:pos_panglima_app/views/pages/login_page.dart';
 import 'package:pos_panglima_app/views/widgets_tree.dart';
 
@@ -50,6 +52,9 @@ class _SplashScreenState extends State<SplashScreen> {
       return;
     }
 
+    await _maybePromptUpdate();
+    if (!mounted) return;
+
     final token = await apiClient.getToken();
     final result = await ShiftStorageService.getShiftId();
 
@@ -71,6 +76,115 @@ class _SplashScreenState extends State<SplashScreen> {
         context,
         MaterialPageRoute(builder: (_) => const LoginPage(title: 'Login Page')),
       );
+    }
+  }
+
+  Future<void> _maybePromptUpdate() async {
+    final info = await UpdateService.check();
+    if (info == null) return;
+    if (info.updateAvailability != UpdateAvailability.updateAvailable) return;
+    if (!mounted) return;
+
+    final isCritical = info.immediateUpdateAllowed;
+
+    final shouldUpdate = await showDialog<bool>(
+      context: context,
+      barrierDismissible: !isCritical,
+      builder: (ctx) => PopScope(
+        canPop: !isCritical,
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          backgroundColor: Colors.white,
+          surfaceTintColor: Colors.transparent,
+          icon: const Icon(
+            Icons.system_update_rounded,
+            size: 48,
+            color: AppColors.primary,
+          ),
+          title: const Text(
+            'Versi Baru Tersedia',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
+          ),
+          content: Text(
+            isCritical
+                ? 'Update wajib tersedia. Silakan perbarui aplikasi untuk melanjutkan.'
+                : 'Versi terbaru aplikasi tersedia. Update sekarang untuk menikmati perbaikan dan fitur baru.',
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 14,
+              color: Colors.black54,
+              height: 1.5,
+            ),
+          ),
+          actionsPadding: const EdgeInsets.only(
+            bottom: 20,
+            left: 20,
+            right: 20,
+            top: 4,
+          ),
+          actions: [
+            Row(
+              children: [
+                if (!isCritical)
+                  Expanded(
+                    child: OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        side: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      onPressed: () => Navigator.pop(ctx, false),
+                      child: const Text(
+                        'Nanti',
+                        style: TextStyle(
+                          color: Colors.black87,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                if (!isCritical) const SizedBox(width: 12),
+                Expanded(
+                  child: FilledButton(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    onPressed: () => Navigator.pop(ctx, true),
+                    child: const Text(
+                      'Update',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (shouldUpdate != true) return;
+
+    if (isCritical) {
+      await UpdateService.startImmediate();
+    } else {
+      await UpdateService.startFlexible();
     }
   }
 

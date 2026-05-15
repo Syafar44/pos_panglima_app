@@ -56,7 +56,13 @@ class _ProductModalWidgetState extends State<ProductModalWidget>
   bool isSubmitting = false;
 
   void _decreaseQuantity() {
-    if (quantity > 1) setState(() => quantity--);
+    if (quantity > 1) {
+      setState(() {
+        quantity--;
+        final newMax = (widget.maxProduk ?? 0) * quantity;
+        if (totalSelectedProps > newMax) selectedProps.clear();
+      });
+    }
   }
 
   void _increaseQuantity() {
@@ -767,21 +773,13 @@ class _ProductModalWidgetState extends State<ProductModalWidget>
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
-      onPressed: isSubmitting
+      onPressed: (isSubmitting || !isPropsValid)
           ? null
           : () {
-              // 1. Cek Shift
               if (hasShift == false) {
                 _showWarningShift();
                 return;
               }
-
-              // 2. Cek Validasi Produk (Topping/Props)
-              if (!isPropsValid) {
-                return;
-              }
-
-              // 3. Eksekusi
               savedToCart();
             },
       child: isSubmitting
