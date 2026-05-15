@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:pos_panglima_app/services/auth_service.dart';
 import 'package:pos_panglima_app/services/helper/dio_client.dart';
+import 'package:pos_panglima_app/services/network_service.dart';
 import 'package:pos_panglima_app/services/shift_service.dart';
 import 'package:pos_panglima_app/services/storage/shift_storage_service.dart';
 import 'package:pos_panglima_app/utils/convert.dart';
@@ -68,9 +69,9 @@ class _StartShiftModalState extends State<StartShiftModal> {
           'responseData': e.response?.data?.toString(),
         },
       );
-      if (!mounted) return;
-      isLoadingProfile = false;
       debugPrint('error shift: ${e.response}');
+      if (!mounted) return;
+      setState(() => isLoadingProfile = false);
     }
   }
 
@@ -98,6 +99,18 @@ class _StartShiftModalState extends State<StartShiftModal> {
           context,
           title: "Input Tidak Valid",
           message: "Modal awal wajib diisi",
+          status: SnackBarStatus.warning,
+        );
+        return;
+      }
+
+      final online = await NetworkService.isOnline();
+      if (!online) {
+        if (!mounted) return;
+        SnackbarUtil.show(
+          context,
+          title: 'Tidak Ada Koneksi',
+          message: 'Perangkat sedang offline. Periksa koneksi internet Anda.',
           status: SnackBarStatus.warning,
         );
         return;

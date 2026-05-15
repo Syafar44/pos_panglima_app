@@ -223,19 +223,19 @@ class _LaporanPageState extends State<LaporanPage> {
             ],
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.all(20.0),
-          child: Row(
-            children: [
-              _buildSummaryCard(
-                title: 'Penerimaan Shift Sebelumnya',
-                value: convertIDR(2934589),
-                icon: Icons.account_balance_wallet_rounded,
-                color: AppColors.accentDark,
-              ),
-            ],
-          ),
-        ),
+        // Padding(
+        //   padding: const EdgeInsets.all(20.0),
+        //   child: Row(
+        //     children: [
+        //       _buildSummaryCard(
+        //         title: 'Penerimaan Shift Sebelumnya',
+        //         value: convertIDR(2934589),
+        //         icon: Icons.account_balance_wallet_rounded,
+        //         color: AppColors.accentDark,
+        //       ),
+        //     ],
+        //   ),
+        // ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20.0),
           child: Column(

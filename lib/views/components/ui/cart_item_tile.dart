@@ -5,6 +5,7 @@ import 'package:pos_panglima_app/utils/convert.dart';
 class CartItemTile extends StatelessWidget {
   final Map<String, dynamic> item;
   final VoidCallback onDelete, onIncrease, onDecrease, onUpdate;
+  final bool isBusy;
 
   const CartItemTile({
     super.key,
@@ -13,6 +14,7 @@ class CartItemTile extends StatelessWidget {
     required this.onIncrease,
     required this.onDecrease,
     required this.onUpdate,
+    this.isBusy = false,
   });
 
   @override
@@ -135,17 +137,17 @@ class CartItemTile extends StatelessWidget {
                   children: [
                     // Tombol Hapus (Kecil di pojok)
                     GestureDetector(
-                      onTap: onDelete,
+                      onTap: isBusy ? null : onDelete,
                       child: Container(
                         padding: const EdgeInsets.all(4),
                         decoration: BoxDecoration(
-                          color: Colors.red[50],
+                          color: isBusy ? Colors.grey[100] : Colors.red[50],
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(
+                        child: Icon(
                           Icons.close,
                           size: 16,
-                          color: Colors.redAccent,
+                          color: isBusy ? Colors.grey[400] : Colors.redAccent,
                         ),
                       ),
                     ),
@@ -159,22 +161,32 @@ class CartItemTile extends StatelessWidget {
                       ),
                       child: Row(
                         children: [
-                          _buildStepButton(Icons.remove, onDecrease),
+                          _buildStepButton(Icons.remove, isBusy ? () {} : onDecrease, disabled: isBusy),
                           Container(
                             constraints: const BoxConstraints(minWidth: 40),
                             alignment: Alignment.center,
-                            child: Text(
-                              "${item['quantity']}",
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                              ),
-                            ),
+                            child: isBusy
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: AppColors.primary,
+                                    ),
+                                  )
+                                : Text(
+                                    "${item['quantity']}",
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                    ),
+                                  ),
                           ),
                           _buildStepButton(
                             Icons.add,
-                            onIncrease,
+                            isBusy ? () {} : onIncrease,
                             isPrimary: true,
+                            disabled: isBusy,
                           ),
                         ],
                       ),
@@ -193,19 +205,28 @@ class CartItemTile extends StatelessWidget {
     IconData icon,
     VoidCallback onTap, {
     bool isPrimary = false,
+    bool disabled = false,
   }) {
     return GestureDetector(
-      onTap: onTap,
+      onTap: disabled ? null : onTap,
       child: Container(
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: isPrimary ? AppColors.primary : Colors.transparent,
+          color: disabled
+              ? Colors.grey[300]
+              : isPrimary
+                  ? AppColors.primary
+                  : Colors.transparent,
           borderRadius: BorderRadius.circular(20),
         ),
         child: Icon(
           icon,
           size: 18,
-          color: isPrimary ? Colors.white : Colors.black87,
+          color: disabled
+              ? Colors.grey[500]
+              : isPrimary
+                  ? Colors.white
+                  : Colors.black87,
         ),
       ),
     );

@@ -5,8 +5,10 @@ class RejectService {
 
   RejectService(this.dio);
 
-  Future<Response> getListItems({String? search, int limit = 20}) {
-    return dio.get("/pos/item?page=1&limit=$limit&search=${search ?? ''}");
+  Future<Response> getListItems(int id, {String? search, int limit = 20}) {
+    return dio.get(
+      "/pos/reject/$id/items?page=1&limit=$limit&search=${search ?? ''}",
+    );
   }
 
   Future<Response> getDetailItems(int id) {
@@ -51,10 +53,7 @@ class RejectService {
 
   // Lampiran
   Future<Response> getLampiran(String fileUrl) {
-    return dio.get(
-      fileUrl,
-      options: Options(responseType: ResponseType.bytes),
-    );
+    return dio.get(fileUrl, options: Options(responseType: ResponseType.bytes));
   }
 
   Future<Response> postLampiran(int id, FormData payload) {

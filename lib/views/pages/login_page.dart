@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:pos_panglima_app/services/auth_service.dart';
@@ -6,7 +8,6 @@ import 'package:pos_panglima_app/services/shift_service.dart';
 import 'package:pos_panglima_app/services/storage/shift_storage_service.dart';
 import 'package:pos_panglima_app/utils/app_colors.dart';
 import 'package:pos_panglima_app/utils/crash_reporter.dart';
-import 'package:pos_panglima_app/utils/loader_utils.dart';
 import 'package:pos_panglima_app/utils/snackbar_util.dart';
 import 'package:pos_panglima_app/views/widgets/start_shift_modal.dart';
 import 'package:pos_panglima_app/views/widgets_tree.dart';
@@ -28,6 +29,8 @@ class _LoginPageState extends State<LoginPage> {
 
   bool loading = false;
   bool _isObscure = true;
+  bool _loginTimedOut = false;
+  Timer? _loginTimer;
 
   late final ShiftService shiftService;
 
@@ -42,7 +45,17 @@ class _LoginPageState extends State<LoginPage> {
   void dispose() {
     controllerEmail.dispose();
     controllerPw.dispose();
+    _loginTimer?.cancel();
     super.dispose();
+  }
+
+  void _startLoginTimeout() {
+    _loginTimer?.cancel();
+    _loginTimer = Timer(const Duration(seconds: 15), () {
+      if (mounted && loading) {
+        setState(() => _loginTimedOut = true);
+      }
+    });
   }
 
   /// Cek apakah outlet sedang punya shift aktif.
@@ -91,7 +104,11 @@ class _LoginPageState extends State<LoginPage> {
       return;
     }
 
-    setState(() => loading = true);
+    setState(() {
+      loading = true;
+      _loginTimedOut = false;
+    });
+    _startLoginTimeout();
 
     try {
       final response = await authService.login({
@@ -127,7 +144,11 @@ class _LoginPageState extends State<LoginPage> {
         }
       } catch (fcmError, stack) {
         debugPrint("FCM Error: $fcmError");
-        CrashReporter.report(fcmError, stack, reason: 'login_page.postFcmToken');
+        CrashReporter.report(
+          fcmError,
+          stack,
+          reason: 'login_page.postFcmToken',
+        );
       }
 
       if (!mounted) return;
@@ -162,7 +183,12 @@ class _LoginPageState extends State<LoginPage> {
         status: SnackBarStatus.error,
       );
     } finally {
-      if (mounted) setState(() => loading = false);
+      _loginTimer?.cancel();
+      if (mounted)
+        setState(() {
+          loading = false;
+          _loginTimedOut = false;
+        });
     }
   }
 
@@ -255,7 +281,7 @@ class _LoginPageState extends State<LoginPage> {
                       width: double.infinity,
                       height: 55,
                       child: ElevatedButton(
-                        onPressed: loading ? null : login,
+                        onPressed: (loading && !_loginTimedOut) ? null : login,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.primary,
                           foregroundColor: Colors.white,
@@ -264,16 +290,20 @@ class _LoginPageState extends State<LoginPage> {
                             borderRadius: BorderRadius.circular(16.0),
                           ),
                         ),
-                        child: loading
-                            ? ModernLoading(
-                                size: 24,
-                                strokeWidth: 3,
-                                timeout: const Duration(seconds: 10),
-                                onRetry: () {},
+                        child: loading && !_loginTimedOut
+                            ? const SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 3,
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    Colors.white,
+                                  ),
+                                ),
                               )
-                            : const Text(
-                                "Masuk",
-                                style: TextStyle(
+                            : Text(
+                                _loginTimedOut ? "Coba Lagi" : "Masuk",
+                                style: const TextStyle(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 16,
                                 ),
