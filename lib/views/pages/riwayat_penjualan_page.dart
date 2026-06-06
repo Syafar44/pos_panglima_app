@@ -123,6 +123,7 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
     } catch (e, stack) {
       CrashReporter.report(e, stack, reason: 'riwayat_penjualan_page._fetchOrderDetail');
       if (!mounted) return;
+      setState(() => isLoadingOrdersDetail = false);
       SnackbarUtil.show(
         context,
         title: "Gagal memuat detail",
@@ -149,10 +150,13 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
         isLoadingUserId = false;
       });
     } catch (e, stack) {
-      isLoadingUserId = false;
-      debugPrint("Gagal ambil user ID: $e");
       CrashReporter.report(e, stack, reason: 'riwayat_penjualan_page._fetchProfile');
+      debugPrint("Gagal ambil user ID: $e");
       if (!mounted) return;
+      setState(() {
+        isLoadingUserId = false;
+        isLoadingOrdersList = false;
+      });
       SnackbarUtil.show(
         context,
         title: "Gagal memuat data pengguna",

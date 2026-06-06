@@ -112,7 +112,7 @@ Komponen reusable yang sudah tersedia di project:
 
 **Lokasi:** [lib/views/pages/pesanan_baru_page.dart:86-322](lib/views/pages/pesanan_baru_page.dart#L86-L322)
 
-**Status:** Belum Implementasi
+**Status:** Sudah Implementasi
 
 **Kondisi saat ini:**
 - Tidak ada per-tombol loading. User bisa tap berkali-kali → kirim banyak request paralel (race condition).
@@ -157,7 +157,7 @@ Komponen reusable yang sudah tersedia di project:
 
 **Lokasi:** [lib/views/pages/payment_page.dart:59-62](lib/views/pages/payment_page.dart#L59-L62)
 
-**Status:** Belum Implementasi
+**Status:** Sudah Implementasi
 
 **Kondisi saat ini:**
 - 3 flag loading terpisah, semuanya default `true`.
@@ -217,7 +217,7 @@ Komponen reusable yang sudah tersedia di project:
 
 **Lokasi:** [lib/views/pages/riwayat_penjualan_page.dart:75-164](lib/views/pages/riwayat_penjualan_page.dart#L75-L164)
 
-**Status:** Belum Implementasi
+**Status:** Sudah Implementasi
 
 **Kondisi saat ini:**
 - Skeleton sudah dipakai untuk list & detail.
@@ -305,7 +305,7 @@ Komponen reusable yang sudah tersedia di project:
 
 **Lokasi:** [lib/views/pages/reject_detail_page.dart:116](lib/views/pages/reject_detail_page.dart#L116)
 
-**Status:** Belum Implementasi
+**Status:** Sudah Implementasi
 
 **Kondisi saat ini:**
 - `_isLoadingDetail` dipakai dengan `CircularProgressIndicator` polos — tanpa timeout/retry.
@@ -334,7 +334,7 @@ Komponen reusable yang sudah tersedia di project:
 
 **Lokasi:** [lib/views/pages/pengaturan_page.dart:514](lib/views/pages/pengaturan_page.dart#L514)
 
-**Status:** Belum Implementasi
+**Status:** Sudah Implementasi
 
 **Kondisi saat ini:**
 - **Bug:** di [pengaturan_page.dart:526](lib/views/pages/pengaturan_page.dart#L526), saat catch error, `isLoadingProfile = false` di-assign **tanpa `setState`** → widget tidak rebuild → spinner stuck.
@@ -371,7 +371,7 @@ Komponen reusable yang sudah tersedia di project:
 
 **Lokasi:** [lib/views/widgets/start_shift_modal.dart:47](lib/views/widgets/start_shift_modal.dart#L47)
 
-**Status:** Belum Implementasi
+**Status:** Sudah Implementasi
 
 **Kondisi saat ini:**
 - Bug serupa item 12: [start_shift_modal.dart:72](lib/views/widgets/start_shift_modal.dart#L72) — `isLoadingProfile = false` tanpa `setState`.
@@ -397,7 +397,7 @@ Komponen reusable yang sudah tersedia di project:
 
 **Lokasi:** [lib/views/widgets/end_shift_modal.dart:53](lib/views/widgets/end_shift_modal.dart#L53)
 
-**Status:** Belum Implementasi
+**Status:** Sudah Implementasi
 
 **Kondisi saat ini:**
 - Bug serupa: [end_shift_modal.dart:67](lib/views/widgets/end_shift_modal.dart#L67) — `isLoadingProfile = false` tanpa `setState`.
@@ -545,7 +545,7 @@ Prioritaskan untuk: `pesanan_baru_page` (search produk), `riwayat_penjualan_page
 
 **Lokasi:** Semua aksi submit (kecuali `payment_page.handlePayment`)
 
-**Status:** Belum Implementasi
+**Status:** Sebagian Sudah Implementasi (start_shift, end_shift sudah; reject/SO/login belum)
 
 **Kondisi saat ini:**
 - Hanya `payment_page.handlePayment` yang panggil `NetworkService.isOnline()` sebelum kirim.

@@ -42,6 +42,7 @@ class _PesananBaruPageState extends State<PesananBaruPage>
 
   List<Map<String, dynamic>> cartItems = [];
   int totalPayment = 0;
+  final Set<int> _busyCartIds = {};
   final ScrollController _scrollController = ScrollController();
   double fadeOpacity = 0.2;
   final apiClient = ApiClient();
@@ -84,17 +85,19 @@ class _PesananBaruPageState extends State<PesananBaruPage>
   }
 
   void _decreaseQuantity(int id) async {
+    if (_busyCartIds.contains(id)) return;
+    setState(() => _busyCartIds.add(id));
     try {
       await cartService.minusCart(id);
-      loadCart();
+      await loadCart();
     } catch (e, stack) {
       CrashReporter.report(
         e,
         stack,
         reason: 'pesanan_baru_page._decreaseQuantity',
       );
+      await loadCart();
       if (!mounted) return;
-      loadCart();
       SnackbarUtil.show(
         context,
         title: "Gagal memuat keranjang",
@@ -102,13 +105,17 @@ class _PesananBaruPageState extends State<PesananBaruPage>
             "Terjadi kesalahan saat mengambil data keranjang. Mohon periksa koneksi atau coba kembali.",
         status: SnackBarStatus.error,
       );
+    } finally {
+      if (mounted) setState(() => _busyCartIds.remove(id));
     }
   }
 
   void _increaseQuantity(int id) async {
+    if (_busyCartIds.contains(id)) return;
+    setState(() => _busyCartIds.add(id));
     try {
       await cartService.plusCart(id);
-      loadCart();
+      await loadCart();
     } on DioException catch (e, stack) {
       CrashReporter.report(
         e,
@@ -120,6 +127,7 @@ class _PesananBaruPageState extends State<PesananBaruPage>
           'responseData': e.response?.data?.toString(),
         },
       );
+      await loadCart();
       if (!mounted) return;
       final String message = e.response?.data['message'] ?? 'Terjadi kesalahan';
 
@@ -130,12 +138,15 @@ class _PesananBaruPageState extends State<PesananBaruPage>
           builder: (_) => ModalInsufficientStock(items: parsedItems),
         );
       }
-      loadCart();
+    } finally {
+      if (mounted) setState(() => _busyCartIds.remove(id));
     }
   }
 
   Future<void> _deletedCartItem(int id) async {
+    if (_busyCartIds.contains(id)) return;
     setState(() {
+      _busyCartIds.add(id);
       cartItems.removeWhere((item) => item['id'] == id);
     });
 
@@ -155,7 +166,8 @@ class _PesananBaruPageState extends State<PesananBaruPage>
         status: SnackBarStatus.error,
       );
     } finally {
-      loadCart();
+      if (mounted) setState(() => _busyCartIds.remove(id));
+      await loadCart();
     }
   }
 
@@ -756,6 +768,7 @@ class _PesananBaruPageState extends State<PesananBaruPage>
                                   final e = cartItems[index];
                                   return CartItemTile(
                                     item: e,
+                                    isBusy: _busyCartIds.contains(e['id']),
                                     onDelete: () => _deletedCartItem(e['id']),
                                     onIncrease: () =>
                                         _increaseQuantity(e['id']),

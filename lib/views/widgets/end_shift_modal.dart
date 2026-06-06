@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:pos_panglima_app/services/auth_service.dart';
 import 'package:pos_panglima_app/services/helper/dio_client.dart';
+import 'package:pos_panglima_app/services/network_service.dart';
 import 'package:pos_panglima_app/services/report_service.dart';
 import 'package:pos_panglima_app/utils/crash_reporter.dart';
 import 'package:pos_panglima_app/services/shift_service.dart';
@@ -64,7 +65,7 @@ class _EndShiftModalState extends State<EndShiftModal> {
     } catch (e, stack) {
       CrashReporter.report(e, stack, reason: 'endShift_modal.getProfile');
       if (!mounted) return;
-      isLoadingProfile = false;
+      setState(() => isLoadingProfile = false);
       SnackbarUtil.show(
         context,
         title: 'Gagal memuat data pengguna',
@@ -76,15 +77,22 @@ class _EndShiftModalState extends State<EndShiftModal> {
   }
 
   Future<void> _loadShiftId() async {
-    final result = await ShiftStorageService.getShiftId();
-    final cash = await ShiftStorageService.getCash();
-    await _getPenerimaan(result);
-    _autoFillSalesEnd(cash);
-    setState(() {
-      shiftId = result;
-      cashActive = cash;
-      isLoading = false;
-    });
+    try {
+      final result = await ShiftStorageService.getShiftId();
+      final cash = await ShiftStorageService.getCash();
+      await _getPenerimaan(result);
+      _autoFillSalesEnd(cash);
+      if (!mounted) return;
+      setState(() {
+        shiftId = result;
+        cashActive = cash;
+        isLoading = false;
+      });
+    } catch (e, stack) {
+      CrashReporter.report(e, stack, reason: 'endShift_modal._loadShiftId');
+      if (!mounted) return;
+      setState(() => isLoading = false);
+    }
   }
 
   Future<void> _deleteIdShift() async {
@@ -368,6 +376,18 @@ class _EndShiftModalState extends State<EndShiftModal> {
           title: "Data Tidak Ditemukan",
           message: "Shift tidak ditemukan",
           status: SnackBarStatus.error,
+        );
+        return;
+      }
+
+      final online = await NetworkService.isOnline();
+      if (!online) {
+        if (!mounted) return;
+        SnackbarUtil.show(
+          context,
+          title: 'Tidak Ada Koneksi',
+          message: 'Perangkat sedang offline. Periksa koneksi internet Anda.',
+          status: SnackBarStatus.warning,
         );
         return;
       }

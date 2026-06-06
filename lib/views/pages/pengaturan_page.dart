@@ -522,9 +522,9 @@ class _PengaturanPageState extends State<PengaturanPage> {
       });
     } catch (e, stack) {
       CrashReporter.report(e, stack, reason: 'pengaturan_page.getProfile');
-      if (!mounted) return;
-      isLoadingProfile = false;
       debugPrint("Gagal ambil profile: $e");
+      if (!mounted) return;
+      setState(() => isLoadingProfile = false);
       SnackbarUtil.show(
         context,
         title: "Gagal memuat data pengguna",

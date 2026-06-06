@@ -17,6 +17,7 @@ import 'package:pos_panglima_app/services/helper/dio_client.dart';
 import 'package:pos_panglima_app/services/reject_service.dart';
 import 'package:pos_panglima_app/utils/app_colors.dart';
 import 'package:pos_panglima_app/utils/crash_reporter.dart';
+import 'package:pos_panglima_app/utils/loader_utils.dart';
 import 'package:pos_panglima_app/utils/snackbar_util.dart';
 import 'package:pos_panglima_app/views/widgets_tree.dart';
 
@@ -119,8 +120,10 @@ class _RejectDetailPageState extends State<RejectDetailPage> {
       final data = res.data['data'] as Map<String, dynamic>;
       final lines = (data['lines'] as List?) ?? [];
       final lampirans = (data['lampirans'] as List?) ?? [];
-      debugPrint('[REJECT-DETAIL] loaded id=${widget.id}, '
-          'lines=${lines.length}, lampirans=${lampirans.length}');
+      debugPrint(
+        '[REJECT-DETAIL] loaded id=${widget.id}, '
+        'lines=${lines.length}, lampirans=${lampirans.length}',
+      );
 
       // Buat map: reject_lines_id → lampiran_id
       // (file_url sekarang diambil dari masing-masing line, bukan dari lampirans)
@@ -129,8 +132,10 @@ class _RejectDetailPageState extends State<RejectDetailPage> {
         final lm = l as Map;
         final lampiranId = (lm['id'] as num?)?.toInt();
         final rejectLinesId = (lm['reject_lines_id'] as num?)?.toInt();
-        debugPrint('[REJECT-DETAIL] lampiran raw → id=$lampiranId, '
-            'reject_lines_id=$rejectLinesId');
+        debugPrint(
+          '[REJECT-DETAIL] lampiran raw → id=$lampiranId, '
+          'reject_lines_id=$rejectLinesId',
+        );
         if (lampiranId != null && rejectLinesId != null) {
           lampiranIdMap[rejectLinesId] = lampiranId;
         }
@@ -161,13 +166,16 @@ class _RejectDetailPageState extends State<RejectDetailPage> {
             entry.lampiranUrl = lineFileUrl;
           }
           if (entry.lineId != null) {
-            final lampiranId = lampiranIdMap[entry.lineId!] ??
+            final lampiranId =
+                lampiranIdMap[entry.lineId!] ??
                 _extractLampiranIdFromUrl(lineFileUrl);
             if (lampiranId != null) {
               entry.lampiranId = lampiranId;
             }
-            debugPrint('[REJECT-DETAIL] line ${entry.lineId} → '
-                'lampiranId=$lampiranId, file_url="$lineFileUrl"');
+            debugPrint(
+              '[REJECT-DETAIL] line ${entry.lineId} → '
+              'lampiranId=$lampiranId, file_url="$lineFileUrl"',
+            );
           }
           entry.itemId = (m['item_id'] as num?)?.toInt();
           entry.itemCode = (m['code'] ?? m['item_code'])?.toString();
@@ -202,12 +210,16 @@ class _RejectDetailPageState extends State<RejectDetailPage> {
       // Fetch lampiran untuk setiap baris yang memiliki lampiran
       // (cek seluruh items, bukan length-1, karena draft kosong sudah otomatis
       // di-skip oleh kondisi url null/empty)
-      debugPrint('[REJECT-DETAIL] _items.length=${_items.length}, '
-          'isLocked=$_isLocked');
+      debugPrint(
+        '[REJECT-DETAIL] _items.length=${_items.length}, '
+        'isLocked=$_isLocked',
+      );
       for (int i = 0; i < _items.length; i++) {
         final url = _items[i].lampiranUrl;
-        debugPrint('[REJECT-DETAIL] check item[$i] '
-            'lineId=${_items[i].lineId}, url="$url"');
+        debugPrint(
+          '[REJECT-DETAIL] check item[$i] '
+          'lineId=${_items[i].lineId}, url="$url"',
+        );
         if (url != null && url.isNotEmpty) _fetchLampiran(i);
       }
     } catch (e, stack) {
@@ -273,27 +285,72 @@ class _RejectDetailPageState extends State<RejectDetailPage> {
     return entry;
   }
 
+  /// Extract list of items from API response. Handles both shapes:
+  /// - `{data: [...]}` (direct list)
+  /// - `{data: {data: [...], metadata: {...}}}` (paginated wrapper)
+  List<dynamic> _extractItemsList(dynamic raw) {
+    debugPrint('[CATALOG-EXTRACT] raw.runtimeType=${raw.runtimeType}');
+    if (raw is Map) {
+      debugPrint('[CATALOG-EXTRACT] raw keys=${raw.keys.toList()}');
+      final data = raw['data'];
+      debugPrint('[CATALOG-EXTRACT] data.runtimeType=${data.runtimeType}');
+      if (data is List) {
+        debugPrint('[CATALOG-EXTRACT] direct list, length=${data.length}');
+        return data;
+      }
+      if (data is Map) {
+        debugPrint('[CATALOG-EXTRACT] data is Map, keys=${data.keys.toList()}');
+        final nested = data['data'];
+        debugPrint('[CATALOG-EXTRACT] nested.runtimeType=${nested.runtimeType}');
+        if (nested is List) {
+          debugPrint('[CATALOG-EXTRACT] nested list, length=${nested.length}');
+          return nested;
+        }
+      }
+    }
+    debugPrint('[CATALOG-EXTRACT] FALLBACK empty');
+    return const [];
+  }
+
   Future<void> _searchItems(int index, String query) async {
     if (index >= _items.length) return;
     setState(() => _items[index].isCatalogSearching = true);
     try {
-      final res = await rejectService.getListItems(search: query);
-      final list = (res.data['data'] as List?) ?? [];
+      debugPrint(
+        '[CATALOG-SEARCH] START rejectId=${widget.id}, '
+        'query="$query", index=$index',
+      );
+      final res = await rejectService.getListItems(widget.id, search: query);
+      debugPrint(
+        '[CATALOG-SEARCH] status=${res.statusCode}, '
+        'data=${res.data.toString().substring(0, res.data.toString().length.clamp(0, 500))}',
+      );
+      final list = _extractItemsList(res.data);
+      debugPrint('[CATALOG-SEARCH] parsed list.length=${list.length}');
+      if (list.isNotEmpty) {
+        debugPrint('[CATALOG-SEARCH] first item=${list.first}');
+      }
       if (mounted && index < _items.length) {
         setState(() {
           _items[index].filteredCatalog = list
               .map(
                 (e) => _CatalogItem(
-                  id: e['id'] as int,
-                  code: e['code'] as String,
-                  name: e['name'] as String,
+                  id: (e['item_id'] as num).toInt(),
+                  code: (e['item_code'] ?? '').toString(),
+                  name: (e['item_name'] ?? '').toString(),
                 ),
               )
               .toList();
           _items[index].isCatalogSearching = false;
         });
+        debugPrint(
+          '[CATALOG-SEARCH] DONE filteredCatalog.length='
+          '${_items[index].filteredCatalog?.length}',
+        );
       }
     } catch (e, stack) {
+      debugPrint('[CATALOG-SEARCH] ERROR: $e');
+      debugPrint(stack.toString());
       CrashReporter.report(e, stack, reason: 'reject_detail.searchItems');
       if (mounted && index < _items.length) {
         setState(() => _items[index].isCatalogSearching = false);
@@ -304,22 +361,37 @@ class _RejectDetailPageState extends State<RejectDetailPage> {
   Future<void> _loadCatalog() async {
     setState(() => _catalogLoading = true);
     try {
-      final res = await rejectService.getListItems();
-      final list = (res.data['data'] as List?) ?? [];
+      debugPrint('[CATALOG-LOAD] START rejectId=${widget.id}');
+      final res = await rejectService.getListItems(widget.id);
+      debugPrint(
+        '[CATALOG-LOAD] status=${res.statusCode}, '
+        'requestPath=${res.requestOptions.path}',
+      );
+      debugPrint(
+        '[CATALOG-LOAD] data=${res.data.toString().substring(0, res.data.toString().length.clamp(0, 500))}',
+      );
+      final list = _extractItemsList(res.data);
+      debugPrint('[CATALOG-LOAD] parsed list.length=${list.length}');
+      if (list.isNotEmpty) {
+        debugPrint('[CATALOG-LOAD] first item=${list.first}');
+      }
       if (mounted) {
         setState(() {
           _catalog = list
               .map(
                 (e) => _CatalogItem(
-                  id: e['id'] as int,
-                  code: e['code'] as String,
-                  name: e['name'] as String,
+                  id: (e['item_id'] as num).toInt(),
+                  code: (e['item_code'] ?? '').toString(),
+                  name: (e['item_name'] ?? '').toString(),
                 ),
               )
               .toList();
         });
+        debugPrint('[CATALOG-LOAD] DONE _catalog.length=${_catalog.length}');
       }
     } catch (e, stack) {
+      debugPrint('[CATALOG-LOAD] ERROR: $e');
+      debugPrint(stack.toString());
       CrashReporter.report(e, stack, reason: 'reject_detail.loadCatalog');
     } finally {
       if (mounted) setState(() => _catalogLoading = false);
@@ -401,10 +473,12 @@ class _RejectDetailPageState extends State<RejectDetailPage> {
     if (mounted) setState(() => item.isLoadingLampiran = true);
     try {
       final res = await rejectService.getLampiran(url);
-      debugPrint('[REJECT-FETCH] response index=$index, '
-          'status=${res.statusCode}, '
-          'content-type=${res.headers.value('content-type')}, '
-          'runtimeType=${res.data.runtimeType}');
+      debugPrint(
+        '[REJECT-FETCH] response index=$index, '
+        'status=${res.statusCode}, '
+        'content-type=${res.headers.value('content-type')}, '
+        'runtimeType=${res.data.runtimeType}',
+      );
 
       final raw = res.data;
       Uint8List? bytes;
@@ -413,8 +487,10 @@ class _RejectDetailPageState extends State<RejectDetailPage> {
       } else if (raw is List<int>) {
         bytes = Uint8List.fromList(raw);
       } else {
-        debugPrint('[REJECT-FETCH] WARNING: data bukan Uint8List/List<int>. '
-            'Sample: ${raw.toString().substring(0, raw.toString().length.clamp(0, 200))}');
+        debugPrint(
+          '[REJECT-FETCH] WARNING: data bukan Uint8List/List<int>. '
+          'Sample: ${raw.toString().substring(0, raw.toString().length.clamp(0, 200))}',
+        );
       }
       debugPrint('[REJECT-FETCH] bytes.length=${bytes?.length ?? 0}');
 
@@ -626,10 +702,7 @@ class _RejectDetailPageState extends State<RejectDetailPage> {
                   onPressed: () => Navigator.pop(ctx, true),
                   child: const Text(
                     'Hapus',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 14,
-                    ),
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
                   ),
                 ),
               ),
@@ -934,9 +1007,7 @@ class _RejectDetailPageState extends State<RejectDetailPage> {
       if (!mounted) return;
       setState(() {
         item.lampiranId = (data is Map) ? (data['id'] as num?)?.toInt() : null;
-        item.lampiranUrl = (data is Map)
-            ? data['file_url']?.toString()
-            : null;
+        item.lampiranUrl = (data is Map) ? data['file_url']?.toString() : null;
         item.isUploadingLampiran = false;
       });
       SnackbarUtil.show(
@@ -1458,8 +1529,14 @@ class _RejectDetailPageState extends State<RejectDetailPage> {
           // Item list
           Expanded(
             child: _isLoadingDetail
-                ? const Center(
-                    child: CircularProgressIndicator(color: AppColors.primary),
+                ? Center(
+                    child: ModernLoading(
+                      timeout: const Duration(seconds: 15),
+                      onRetry: () {
+                        setState(() => _isLoadingDetail = true);
+                        _loadRejectDetail();
+                      },
+                    ),
                   )
                 : ListView.builder(
                     padding: EdgeInsets.fromLTRB(
@@ -2041,7 +2118,9 @@ class _RejectDetailPageState extends State<RejectDetailPage> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: ElevatedButton.icon(
-                      onPressed: (isSubmitting || isSavingDraft) ? null : _saveDraft,
+                      onPressed: (isSubmitting || isSavingDraft)
+                          ? null
+                          : _saveDraft,
                       icon: isSavingDraft
                           ? const SizedBox(
                               width: 16,
@@ -2075,7 +2154,9 @@ class _RejectDetailPageState extends State<RejectDetailPage> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: ElevatedButton.icon(
-                      onPressed: (isSubmitting || isSavingDraft) ? null : _submit,
+                      onPressed: (isSubmitting || isSavingDraft)
+                          ? null
+                          : _submit,
                       icon: isSubmitting
                           ? const SizedBox(
                               width: 16,

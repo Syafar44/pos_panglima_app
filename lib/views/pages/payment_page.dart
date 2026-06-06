@@ -185,6 +185,7 @@ class _PaymentPageState extends State<PaymentPage> {
       );
       debugPrint('loadCart error: ${e.response?.data}');
       if (!mounted) return;
+      setState(() => isLoadingCart = false);
       SnackbarUtil.show(
         context,
         title: "Gagal memuat keranjang",
@@ -224,6 +225,48 @@ class _PaymentPageState extends State<PaymentPage> {
     );
   }
 
+  String? _validateOrderPayload({
+    required int? shiftIdVal,
+    required int? userIdVal,
+    required String? customerIdVal,
+    required String orderMethodIdStr,
+    required String? paymentMethodIdStr,
+    required int subTotalVal,
+    required int totalAmountVal,
+    required int? payAmountVal,
+  }) {
+    if (shiftIdVal == null || shiftIdVal <= 0) {
+      return "Shift belum dimulai. Mulai shift terlebih dahulu.";
+    }
+    if (userIdVal == null || userIdVal <= 0) {
+      return "Sesi pengguna tidak valid. Silakan login ulang.";
+    }
+    final outletId = int.tryParse(customerIdVal ?? '');
+    if (outletId == null || outletId <= 0) {
+      return "Data outlet tidak ditemukan. Silakan login ulang.";
+    }
+    final orderMethodId = int.tryParse(orderMethodIdStr);
+    if (orderMethodId == null || orderMethodId <= 0) {
+      return "Metode pesanan belum dipilih.";
+    }
+    if (paymentMethodIdStr != null) {
+      final pmId = int.tryParse(paymentMethodIdStr);
+      if (pmId == null || pmId <= 0) {
+        return "Metode pembayaran non-tunai belum dipilih.";
+      }
+    }
+    if (subTotalVal <= 0) {
+      return "Keranjang kosong atau subtotal tidak valid.";
+    }
+    if (totalAmountVal <= 0) {
+      return "Total bayar tidak valid. Periksa voucher atau keranjang.";
+    }
+    if (payAmountVal != null && payAmountVal < totalAmountVal) {
+      return "Nominal pembayaran tidak mencukupi total.";
+    }
+    return null;
+  }
+
   void handlePayment() async {
     setState(() => isLoading = true);
     bool online = await NetworkService.isOnline();
@@ -258,18 +301,43 @@ class _PaymentPageState extends State<PaymentPage> {
             finalPayment = customAmount;
           }
 
+          final totalAmount = totalPayment - nominalVoucher;
+
+          final validationError = _validateOrderPayload(
+            shiftIdVal: shiftId,
+            userIdVal: userId,
+            customerIdVal: customerId,
+            orderMethodIdStr: selectedMethodId,
+            paymentMethodIdStr: null,
+            subTotalVal: subTotal,
+            totalAmountVal: totalAmount,
+            payAmountVal: finalPayment,
+          );
+          if (validationError != null) {
+            if (!mounted) return;
+            SnackbarUtil.show(
+              context,
+              title: "Data Tidak Valid",
+              message: validationError,
+              status: SnackBarStatus.warning,
+            );
+            debugPrint(
+              'handlePayment validation failed (tunai): $validationError',
+            );
+            return;
+          }
+
           Map<String, dynamic> payloadOrder = {
-            "customers_id": 16, // default
+            "customers_id": 16,
             "pos_shifts_id": shiftId,
-            "outlet_hub_id": int.tryParse(customerId.toString()) ?? 0,
+            "outlet_hub_id": int.parse(customerId!),
             "users_id": userId,
             "pos_payment_method_id": 11,
-            "pos_order_method_id":
-                int.tryParse(selectedMethodId.toString()) ?? 0,
+            "pos_order_method_id": int.parse(selectedMethodId),
             "subtotal_amount": subTotal,
             "discount_amount": subTotal - totalPayment + nominalVoucher,
             "tax_amount": 0.00,
-            "total_amount": totalPayment - nominalVoucher,
+            "total_amount": totalAmount,
             "pay_amount": finalPayment,
             "voucher_barcodes": barcodeList,
             "is_cash": 1,
@@ -293,20 +361,44 @@ class _PaymentPageState extends State<PaymentPage> {
             isPayment: true,
           );
         } else {
+          final totalAmount = totalPayment - nominalVoucher;
+
+          final validationError = _validateOrderPayload(
+            shiftIdVal: shiftId,
+            userIdVal: userId,
+            customerIdVal: customerId,
+            orderMethodIdStr: selectedMethodId,
+            paymentMethodIdStr: selectedPaymentNonTunaiId,
+            subTotalVal: subTotal,
+            totalAmountVal: totalAmount,
+            payAmountVal: totalAmount,
+          );
+          if (validationError != null) {
+            if (!mounted) return;
+            SnackbarUtil.show(
+              context,
+              title: "Data Tidak Valid",
+              message: validationError,
+              status: SnackBarStatus.warning,
+            );
+            debugPrint(
+              'handlePayment validation failed (non-tunai): $validationError',
+            );
+            return;
+          }
+
           Map<String, dynamic> payloadOrder = {
-            "customers_id": 16, // default
+            "customers_id": 16,
             "pos_shifts_id": shiftId,
-            "outlet_hub_id": int.tryParse(customerId.toString()) ?? 0,
+            "outlet_hub_id": int.parse(customerId!),
             "users_id": userId,
-            "pos_payment_method_id":
-                int.tryParse(selectedPaymentNonTunaiId.toString()) ?? 0,
-            "pos_order_method_id":
-                int.tryParse(selectedMethodId.toString()) ?? 0,
+            "pos_payment_method_id": int.parse(selectedPaymentNonTunaiId),
+            "pos_order_method_id": int.parse(selectedMethodId),
             "subtotal_amount": subTotal,
             "discount_amount": subTotal - totalPayment + nominalVoucher,
             "tax_amount": 0.00,
-            "total_amount": totalPayment - nominalVoucher,
-            "pay_amount": totalPayment - nominalVoucher,
+            "total_amount": totalAmount,
+            "pay_amount": totalAmount,
             "voucher_barcodes": barcodeList,
             "is_cash": 0,
           };
@@ -334,18 +426,44 @@ class _PaymentPageState extends State<PaymentPage> {
 
         if (!proceed) return;
 
+        final totalAmount = totalPayment - nominalVoucher;
+
+        final validationError = _validateOrderPayload(
+          shiftIdVal: shiftId,
+          userIdVal: userId,
+          customerIdVal: customerId,
+          orderMethodIdStr: selectedMethodId,
+          paymentMethodIdStr: null,
+          subTotalVal: subTotal,
+          totalAmountVal: totalAmount,
+          payAmountVal: null,
+        );
+        if (validationError != null) {
+          if (!mounted) return;
+          SnackbarUtil.show(
+            context,
+            title: "Data Tidak Valid",
+            message: validationError,
+            status: SnackBarStatus.warning,
+          );
+          debugPrint(
+            'handlePayment validation failed (compliment): $validationError',
+          );
+          return;
+        }
+
         Map<String, dynamic> payloadOrder = {
-          "customers_id": 16, // default
+          "customers_id": 16,
           "pos_shifts_id": shiftId,
-          "outlet_hub_id": int.tryParse(customerId.toString()) ?? 0,
+          "outlet_hub_id": int.parse(customerId!),
           "users_id": userId,
           "pos_payment_method_id": 11,
-          "pos_order_method_id": int.tryParse(selectedMethodId.toString()) ?? 0,
+          "pos_order_method_id": int.parse(selectedMethodId),
           "subtotal_amount": subTotal,
           "discount_amount": subTotal - totalPayment + nominalVoucher,
           "tax_amount": 0.00,
-          "total_amount": totalPayment - nominalVoucher,
-          "pay_amount": totalPayment - nominalVoucher,
+          "total_amount": totalAmount,
+          "pay_amount": totalAmount,
           "is_cash": 1,
           "voucher_barcodes": barcodeList,
           "keterangan": _keteranganCompliment.text,
@@ -462,9 +580,9 @@ class _PaymentPageState extends State<PaymentPage> {
       });
     } catch (e, stack) {
       CrashReporter.report(e, stack, reason: 'payment_page.getProfile');
-      if (!mounted) return;
-      isLoadingUserId = false;
       debugPrint("Gagal ambil user ID: $e");
+      if (!mounted) return;
+      setState(() => isLoadingUserId = false);
       SnackbarUtil.show(
         context,
         title: "Gagal memuat data pengguna",
@@ -486,8 +604,9 @@ class _PaymentPageState extends State<PaymentPage> {
       setState(() => isLoadingMethod = false);
     } catch (e, stack) {
       CrashReporter.report(e, stack, reason: 'payment_page._methods');
-      if (!mounted) return;
       debugPrint("Error fetching methods: $e");
+      if (!mounted) return;
+      setState(() => isLoadingMethod = false);
       SnackbarUtil.show(
         context,
         title: "Gagal memuat metode",
