@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:pos_panglima_app/utils/app_colors.dart';
 import 'package:pos_panglima_app/services/cart_service.dart';
 import 'package:pos_panglima_app/services/helper/dio_client.dart';
+import 'package:pos_panglima_app/services/network_service.dart';
+import 'package:pos_panglima_app/services/storage/offline_stock_service.dart';
 import 'package:pos_panglima_app/services/storage/shift_storage_service.dart';
 import 'package:pos_panglima_app/utils/convert.dart';
 import 'package:pos_panglima_app/utils/crash_reporter.dart';
@@ -141,6 +143,33 @@ class _ProductModalWidgetState extends State<ProductModalWidget>
       "pos_cart_props": mergedProps,
     };
 
+    // ── MODE OFFLINE ──────────────────────────────────────────────────────
+    // Saat offline, simpan ke cart lokal + validasi stok dari snapshot (BOM),
+    // bukan ke server.
+    final online = await NetworkService.isOnline();
+    if (!online) {
+      await _savedToCartOffline(props);
+      return;
+    }
+
+    // ── GUARD STOK LOKAL (online) ─────────────────────────────────────────
+    // Cegah item stok 0 / minus masuk cart sebelum dikirim ke server.
+    // validateDetailed hanya mengecek material presisi (Pcs, dll.);
+    // "Gr" & skip_validation dilewati ("bandingkan yang sesuai saja").
+    // Server tetap jadi otoritas final saat postCart di bawah.
+    final currentCart = await OfflineStockService.getCartSnapshot();
+    final lacking =
+        await OfflineStockService.validateDetailed([...currentCart, payload]);
+    if (lacking.isNotEmpty) {
+      if (!mounted) return;
+      setState(() => isSubmitting = false);
+      showDialog(
+        context: context,
+        builder: (_) => ModalInsufficientStock(items: lacking),
+      );
+      return;
+    }
+
     try {
       await cartService.postCart(payload);
       if (!mounted) return;
@@ -169,6 +198,79 @@ class _ProductModalWidgetState extends State<ProductModalWidget>
       }
     } finally {
       if (mounted) setState(() => isSubmitting = false);
+    }
+  }
+
+  /// Simpan item ke cart lokal saat offline, dengan validasi stok via BOM.
+  Future<void> _savedToCartOffline(List props) async {
+    final int discount = diskonController.text.isEmpty
+        ? 0
+        : int.tryParse(diskonController.text) ?? 0;
+    final int subtotal = widget.price * quantity;
+    const int tax = 0;
+    final int totalDiscount =
+        selectedUnit ? subtotal * discount ~/ 100 : discount;
+
+    // Hanya varian yang benar-benar dipilih (qty > 0), lengkap dengan nama
+    // agar tampil di cart tile.
+    final offlineProps = props
+        .where((p) => (selectedProps[p['id']] ?? 0) > 0)
+        .map<Map<String, dynamic>>((p) => {
+              'pos_menus_id': p['id'],
+              'pos_menus_name': p['title'],
+              'quantity': selectedProps[p['id']] ?? 0,
+            })
+        .toList();
+
+    final offlineItem = <String, dynamic>{
+      'id': DateTime.now().microsecondsSinceEpoch,
+      'pos_menus_id': widget.id,
+      'pos_menus_name': widget.title,
+      'quantity': quantity,
+      'price': widget.price,
+      'subtotal': subtotal,
+      'tax': tax,
+      'is_percentage': selectedUnit ? 1 : 0,
+      'discount': selectedUnit ? 0 : discount,
+      'discount_val': selectedUnit ? discount : 0,
+      'total': subtotal - totalDiscount + tax,
+      'max_qty': widget.maxProduk,
+      'image_url': widget.imageUrl,
+      'pos_cart_props': offlineProps,
+      // Penanda item dibuat offline → akan didorong ke server saat online lagi.
+      '_offline': true,
+    };
+
+    try {
+      // Validasi stok terhadap seluruh cart prospektif (cart saat ini + item baru).
+      final currentCart = await OfflineStockService.getCartSnapshot();
+      final lacking =
+          await OfflineStockService.validateDetailed([...currentCart, offlineItem]);
+      if (lacking.isNotEmpty) {
+        if (!mounted) return;
+        setState(() => isSubmitting = false);
+        showDialog(
+          context: context,
+          builder: (_) => ModalInsufficientStock(items: lacking),
+        );
+        return;
+      }
+
+      await OfflineStockService.addCartItem(offlineItem);
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      widget.onSaved();
+    } catch (e, stack) {
+      CrashReporter.report(e, stack,
+          reason: 'product_modal_widget.savedToCartOffline');
+      if (!mounted) return;
+      setState(() => isSubmitting = false);
+      SnackbarUtil.show(
+        context,
+        title: "Gagal menyimpan",
+        message: "Tidak dapat menyimpan item ke keranjang offline.",
+        status: SnackBarStatus.error,
+      );
     }
   }
 

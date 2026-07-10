@@ -9,6 +9,9 @@ import 'package:pos_panglima_app/data/notifiers.dart';
 import 'package:pos_panglima_app/services/cart_service.dart';
 import 'package:pos_panglima_app/services/helper/dio_client.dart';
 import 'package:pos_panglima_app/services/menu_service.dart';
+import 'package:pos_panglima_app/services/network_service.dart';
+import 'package:pos_panglima_app/services/offline_cart_sync.dart';
+import 'package:pos_panglima_app/services/storage/offline_stock_service.dart';
 import 'package:pos_panglima_app/services/storage/shift_storage_service.dart';
 import 'package:pos_panglima_app/utils/convert.dart';
 import 'package:pos_panglima_app/utils/crash_reporter.dart';
@@ -19,6 +22,7 @@ import 'package:pos_panglima_app/utils/stock_parser.dart';
 import 'package:pos_panglima_app/views/components/ui/cart_item_tile.dart';
 import 'package:pos_panglima_app/views/components/ui/product_card.dart';
 import 'package:pos_panglima_app/views/pages/payment_page.dart';
+import 'package:pos_panglima_app/views/pages/pending_payment_page.dart';
 import 'package:pos_panglima_app/views/widgets/product_modal_widget.dart';
 import 'package:pos_panglima_app/views/widgets/update_product_modal_widget.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -36,6 +40,7 @@ class _PesananBaruPageState extends State<PesananBaruPage>
   bool showSearch = false;
   bool? hasShift;
   bool isLoadingMenu = true;
+  bool isProcessingPayment = false;
   final TextEditingController searchController = TextEditingController();
   final TextEditingController categoryController = TextEditingController();
   final TextEditingController pelangganController = TextEditingController();
@@ -88,6 +93,11 @@ class _PesananBaruPageState extends State<PesananBaruPage>
     if (_busyCartIds.contains(id)) return;
     setState(() => _busyCartIds.add(id));
     try {
+      if (!await NetworkService.isOnline()) {
+        await OfflineStockService.decreaseCartItem(id);
+        await loadCart();
+        return;
+      }
       await cartService.minusCart(id);
       await loadCart();
     } catch (e, stack) {
@@ -114,6 +124,30 @@ class _PesananBaruPageState extends State<PesananBaruPage>
     if (_busyCartIds.contains(id)) return;
     setState(() => _busyCartIds.add(id));
     try {
+      if (!await NetworkService.isOnline()) {
+        // Validasi stok terhadap cart prospektif (baris ini +1).
+        final cart = await OfflineStockService.getCartSnapshot();
+        final prospective = cart
+            .map(
+              (c) => c['id'] == id
+                  ? {...c, 'quantity': (c['quantity'] as num).toInt() + 1}
+                  : c,
+            )
+            .toList()
+            .cast<Map<String, dynamic>>();
+        final lacking = await OfflineStockService.validateDetailed(prospective);
+        if (lacking.isNotEmpty) {
+          if (!mounted) return;
+          showDialog(
+            context: context,
+            builder: (_) => ModalInsufficientStock(items: lacking),
+          );
+          return;
+        }
+        await OfflineStockService.increaseCartItem(id);
+        await loadCart();
+        return;
+      }
       await cartService.plusCart(id);
       await loadCart();
     } on DioException catch (e, stack) {
@@ -151,6 +185,10 @@ class _PesananBaruPageState extends State<PesananBaruPage>
     });
 
     try {
+      if (!await NetworkService.isOnline()) {
+        await OfflineStockService.removeCartItem(id);
+        return;
+      }
       await cartService.deleteCart(id);
     } catch (e, stack) {
       CrashReporter.report(
@@ -198,7 +236,7 @@ class _PesananBaruPageState extends State<PesananBaruPage>
 
     _loadShiftStatus();
 
-    getMenu();
+    _initMenu();
 
     searchController.addListener(() {
       if (searchController.text.isNotEmpty) {
@@ -220,25 +258,70 @@ class _PesananBaruPageState extends State<PesananBaruPage>
     ];
   }
 
+  /// Tambahkan field `category` ke tiap produk supaya filter & pencarian jalan.
+  List _enrichMenu(List rawList) {
+    return rawList.map((categoryGroup) {
+      final categoryName = categoryGroup['category'];
+      final enrichedData = (categoryGroup['data'] as List).map((product) {
+        return {...product, 'category': categoryName};
+      }).toList();
+      return {...categoryGroup, 'data': enrichedData};
+    }).toList();
+  }
+
+  /// Cache-first: tampilkan menu dari local storage dulu (instan, tahan offline
+  /// & saat pindah halaman), baru refresh dari server di belakang layar.
+  Future<void> _initMenu() async {
+    final cachedMenu = await OfflineStockService.getMenu();
+    if (cachedMenu.isNotEmpty && mounted) {
+      setState(() {
+        menuList = _enrichMenu(cachedMenu);
+        isLoadingMenu = false;
+      });
+    }
+    await getMenu();
+  }
+
   Future<void> getMenu() async {
     try {
       final response = await menuService.getList();
       final List rawList = response.data['data'];
-      final enrichedList = rawList.map((categoryGroup) {
-        final categoryName = categoryGroup['category'];
-        final enrichedData = (categoryGroup['data'] as List).map((product) {
-          return {...product, 'category': categoryName};
-        }).toList();
-        return {...categoryGroup, 'data': enrichedData};
-      }).toList();
 
+      // Simpan menu mentah ke local storage untuk fallback offline.
+      await OfflineStockService.saveMenu(rawList);
+
+      if (!mounted) return;
       setState(() {
-        menuList = enrichedList;
+        menuList = _enrichMenu(rawList);
         isLoadingMenu = false;
       });
     } catch (e, stack) {
       CrashReporter.report(e, stack, reason: 'pesanan_baru_page.getMenu');
+
+      // Kalau menu sudah tampil (dari cache), jangan ganggu UI — diam saja.
+      if (menuList.isNotEmpty) return;
+
+      // Belum ada menu di layar → coba ambil dari cache.
+      final cachedMenu = await OfflineStockService.getMenu();
       if (!mounted) return;
+
+      if (cachedMenu.isNotEmpty) {
+        setState(() {
+          menuList = _enrichMenu(cachedMenu);
+          isLoadingMenu = false;
+        });
+        SnackbarUtil.show(
+          context,
+          title: "Mode Offline",
+          message:
+              "Menampilkan menu tersimpan. Stok mengikuti data terakhir saat online.",
+          status: SnackBarStatus.warning,
+        );
+        return;
+      }
+
+      // Tidak ada cache sama sekali → biarkan UI retry tampil.
+      setState(() => isLoadingMenu = true);
       SnackbarUtil.show(
         context,
         title: "Gagal memuat Menu",
@@ -251,10 +334,34 @@ class _PesananBaruPageState extends State<PesananBaruPage>
 
   Future<void> loadCart() async {
     try {
-      final getCart = await cartService.getCart();
-      final newItems = List<Map<String, dynamic>>.from(
-        getCart.data['data'] ?? [],
-      );
+      final online = await NetworkService.isOnline();
+      List<Map<String, dynamic>> newItems;
+
+      if (!online) {
+        // Offline: ambil cart dari local storage.
+        newItems = await OfflineStockService.getCartSnapshot();
+      } else {
+        // Hapus dulu item yang sudah dibayar offline dari cart server agar
+        // tidak muncul lagi di keranjang.
+        await OfflineCartSync.flushServerCartDeletions();
+        // Dorong dulu item yang dibuat saat offline ke cart server agar tidak
+        // hilang saat cart ditarik dari server.
+        final failed = await OfflineCartSync.migrateToServer();
+        if (failed > 0 && mounted) {
+          SnackbarUtil.show(
+            context,
+            title: "Sebagian item gagal disinkronkan",
+            message:
+                "$failed item dari mode offline tidak bisa ditambahkan (cek stok server).",
+            status: SnackBarStatus.warning,
+          );
+        }
+
+        final getCart = await cartService.getCart();
+        newItems = List<Map<String, dynamic>>.from(getCart.data['data'] ?? []);
+        // Sinkronkan snapshot lokal supaya siap saat tiba-tiba offline.
+        await OfflineStockService.saveCartSnapshot(newItems);
+      }
 
       final newTotalPayment = newItems.fold<int>(0, (sum, item) {
         final int price = (item['total'] as int?) ?? 0;
@@ -284,6 +391,45 @@ class _PesananBaruPageState extends State<PesananBaruPage>
     });
   }
 
+  /// Dipanggil saat menekan "Proses Pembayaran". Menyamakan sumber data cart
+  /// lebih dulu supaya quantity di halaman ini dan di halaman pembayaran identik.
+  Future<void> _goToPayment() async {
+    if (isProcessingPayment) return;
+    if (hasShift != true) {
+      SnackbarUtil.show(
+        context,
+        title: "Mulai Shift terlebih dahulu",
+        message: "Shift belum dimulai. Mulai shift terlebih dahulu.",
+        status: SnackBarStatus.warning,
+      );
+      return;
+    }
+    if (cartItems.isEmpty) return;
+
+    setState(() => isProcessingPayment = true);
+    try {
+      if (await NetworkService.isOnline()) {
+        // Online: dorong item offline ke server lalu tarik ulang. Setelah ini
+        // server, snapshot, dan tampilan seragam.
+        await OfflineCartSync.migrateToServer();
+        await loadCart();
+      } else {
+        // Offline: snapshot jadi sumber kebenaran — samakan dengan yang tampil
+        // (mencakup semua perubahan qty +/- yang baru dilakukan).
+        await OfflineStockService.saveCartSnapshot(cartItems);
+      }
+    } finally {
+      if (mounted) setState(() => isProcessingPayment = false);
+    }
+
+    if (!mounted) return;
+    if (cartItems.isEmpty) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const PaymentPage()),
+    );
+  }
+
   void savedToCart(int id, int price, dynamic onSaved) async {
     Map<String, dynamic> payload = {
       "pos_menus_id": id,
@@ -297,6 +443,13 @@ class _PesananBaruPageState extends State<PesananBaruPage>
       "total": price,
       "max_qty": 0,
     };
+
+    // ── MODE OFFLINE ──────────────────────────────────────────────────────
+    if (!await NetworkService.isOnline()) {
+      await _savedToCartOffline(id, price);
+      onSaved();
+      return;
+    }
 
     try {
       await cartService.postCart(payload);
@@ -333,6 +486,55 @@ class _PesananBaruPageState extends State<PesananBaruPage>
     }
   }
 
+  /// Tambah item sederhana (Packaging/Topping/barcode) ke cart lokal offline.
+  Future<void> _savedToCartOffline(int id, int price) async {
+    try {
+      final product = produkList.firstWhere(
+        (p) => p['id'] == id,
+        orElse: () => <String, dynamic>{},
+      );
+      final item = <String, dynamic>{
+        'id': DateTime.now().microsecondsSinceEpoch,
+        'pos_menus_id': id,
+        'pos_menus_name': product['title'] ?? 'Item',
+        'quantity': 1,
+        'price': price,
+        'subtotal': price,
+        'tax': 0,
+        'is_percentage': 0,
+        'discount': 0,
+        'discount_val': 0,
+        'total': price,
+        'max_qty': 0,
+        'image_url': product['image_url'],
+        'pos_cart_props': const [],
+        // Penanda item dibuat offline → didorong ke server saat online lagi.
+        '_offline': true,
+      };
+
+      final currentCart = await OfflineStockService.getCartSnapshot();
+      final lacking = await OfflineStockService.validateDetailed([
+        ...currentCart,
+        item,
+      ]);
+      if (lacking.isNotEmpty) {
+        if (!mounted) return;
+        showDialog(
+          context: context,
+          builder: (_) => ModalInsufficientStock(items: lacking),
+        );
+        return;
+      }
+      await OfflineStockService.addCartItem(item);
+    } catch (e, stack) {
+      CrashReporter.report(
+        e,
+        stack,
+        reason: 'pesanan_baru_page.savedToCartOffline',
+      );
+    }
+  }
+
   void _handleBarcodeScan(String barcode) {
     final cleanBarcode = barcode.trim().toLowerCase();
     if (cleanBarcode.isEmpty) return;
@@ -356,72 +558,7 @@ class _PesananBaruPageState extends State<PesananBaruPage>
       if (foundProduct != null) break;
     }
 
-    if (foundProduct != null) {
-      final productCategory = foundProduct['category'] ?? '';
-      final hasProps = (foundProduct['props'] as List?)?.isNotEmpty ?? false;
-      final int maxProduk = (foundProduct['maxProduk'] as num?)?.toInt() ?? 0;
-
-      // Cek stok produk (maxProduk == 0 berarti stok habis)
-      if (maxProduk == 0) {
-        if (mounted) {
-          SnackbarUtil.show(
-            context,
-            title: "Stok habis",
-            message: "${foundProduct['title']} tidak tersedia (stok 0)",
-            status: SnackBarStatus.error,
-          );
-        }
-        return;
-      }
-
-      // Cek apakah produk sudah ada di keranjang
-      final existingCartItem = cartItems.firstWhere(
-        (item) => item['pos_menus_id'] == foundProduct!['id'],
-        orElse: () => {},
-      );
-
-      if (existingCartItem.isNotEmpty) {
-        // Cek apakah quantity di keranjang sudah mencapai batas stok
-        final int currentQty =
-            (existingCartItem['quantity'] as num?)?.toInt() ?? 0;
-        if (currentQty >= maxProduk) {
-          if (mounted) {
-            SnackbarUtil.show(
-              context,
-              title: "Stok tidak cukup",
-              message:
-                  "${foundProduct['title']} hanya tersedia $maxProduk item",
-              status: SnackBarStatus.error,
-            );
-          }
-          return;
-        }
-        // Produk sudah di keranjang → tambah quantity
-        _increaseQuantity(existingCartItem['id']);
-        if (mounted) {
-          SnackbarUtil.show(
-            context,
-            title: "Berhasil ditambahkan",
-            message: "${foundProduct['title']} +1 quantity",
-            status: SnackBarStatus.success,
-          );
-        }
-      } else if (productCategory != 'Packaging' &&
-          productCategory != 'Isian / Topping' &&
-          hasProps) {
-        _showProductModal(context, foundProduct);
-      } else {
-        savedToCart(foundProduct['id'], foundProduct['price'] ?? 0, loadCart);
-        if (mounted) {
-          SnackbarUtil.show(
-            context,
-            title: "Berhasil ditambahkan",
-            message: "${foundProduct['title']} ditambahkan ke keranjang",
-            status: SnackBarStatus.success,
-          );
-        }
-      }
-    } else {
+    if (foundProduct == null) {
       if (mounted) {
         SnackbarUtil.show(
           context,
@@ -430,7 +567,35 @@ class _PesananBaruPageState extends State<PesananBaruPage>
           status: SnackBarStatus.error,
         );
       }
+      return;
     }
+
+    final productCategory = foundProduct['category'] ?? '';
+    final hasProps = (foundProduct['props'] as List?)?.isNotEmpty ?? false;
+
+    // Validasi stok dilakukan server (sama dengan flow tap manual):
+    // - kalau item sudah di keranjang → increment via API
+    // - kalau tidak, savedToCart hit server. Bila stok kurang, response
+    //   `insufficient_stock` akan memunculkan ModalInsufficientStock.
+    final existingCartItem = cartItems.firstWhere(
+      (item) => item['pos_menus_id'] == foundProduct!['id'],
+      orElse: () => {},
+    );
+
+    if (existingCartItem.isNotEmpty) {
+      _increaseQuantity(existingCartItem['id']);
+      return;
+    }
+
+    // Produk dengan variant (props) selain Packaging/Topping → buka modal pilihan.
+    if (productCategory != 'Packaging' &&
+        productCategory != 'Isian / Topping' &&
+        hasProps) {
+      _showProductModal(context, foundProduct);
+      return;
+    }
+
+    savedToCart(foundProduct['id'], foundProduct['price'] ?? 0, loadCart);
   }
 
   void _showProductModal(BuildContext context, Map<String, dynamic> e) {
@@ -824,64 +989,155 @@ class _PesananBaruPageState extends State<PesananBaruPage>
                             ),
                           ),
 
-                          // 2. Section Tombol Bayar
+                          // 2. Section Tombol Bayar + Hamburger Menu
                           Padding(
                             padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
-                            child: SizedBox(
-                              width: double.infinity,
-                              height: 42,
-                              child: ElevatedButton(
-                                onPressed: () {
-                                  if (hasShift == true) {
-                                    if (cartItems.isNotEmpty) {
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (context) =>
-                                              const PaymentPage(),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: SizedBox(
+                                    height: 42,
+                                    child: ElevatedButton(
+                                      onPressed: isProcessingPayment
+                                          ? null
+                                          : _goToPayment,
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: AppColors.primary,
+                                        foregroundColor: Colors.black87,
+                                        disabledBackgroundColor:
+                                            AppColors.white,
+                                        elevation: 0,
+                                        side: isProcessingPayment
+                                            ? const BorderSide(
+                                                color: AppColors.primary,
+                                              )
+                                            : null,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
                                         ),
-                                      );
-                                    }
-                                  } else {
-                                    SnackbarUtil.show(
-                                      context,
-                                      title: "Mulai Shift terlebih dahulu",
-                                      message:
-                                          "Shift belum dimulai. Mulai shift terlebih dahulu.",
-                                      status: SnackBarStatus.warning,
-                                    );
-                                  }
-                                },
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: AppColors.primary,
-                                  foregroundColor: Colors.black87,
-                                  elevation: 0, // Flat design lebih modern
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(
-                                      12,
-                                    ), // Border radius lebih besar
+                                      ),
+                                      child: isProcessingPayment
+                                          ? const Row(
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment.center,
+                                              children: [
+                                                SizedBox(
+                                                  width: 18,
+                                                  height: 18,
+                                                  child:
+                                                      CircularProgressIndicator(
+                                                        strokeWidth: 2,
+                                                        color:
+                                                            AppColors.primary,
+                                                      ),
+                                                ),
+                                              ],
+                                            )
+                                          : const Row(
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment.center,
+                                              children: [
+                                                Icon(
+                                                  Icons
+                                                      .shopping_cart_checkout_outlined,
+                                                  size: 20,
+                                                  color: Colors.white,
+                                                ),
+                                                SizedBox(width: 12),
+                                                Text(
+                                                  'Proses Pembayaran',
+                                                  style: TextStyle(
+                                                    fontSize: 16,
+                                                    color: Colors.white,
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                    ),
                                   ),
                                 ),
-                                child: const Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(
-                                      Icons.shopping_cart_checkout_outlined,
-                                      size: 20,
-                                      color: Colors.white,
+                                const SizedBox(width: 8),
+                                SizedBox(
+                                  width: 42,
+                                  height: 42,
+                                  child: PopupMenuButton<String>(
+                                    tooltip: 'Menu lainnya',
+                                    icon: const Icon(
+                                      Icons.menu,
+                                      color: AppColors.primary,
                                     ),
-                                    SizedBox(width: 12),
-                                    Text(
-                                      'Proses Pembayaran',
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.bold,
+                                    // Muncul di atas tombol, sedikit naik & lebar.
+                                    position: PopupMenuPosition.over,
+                                    offset: const Offset(0, -64),
+                                    color: Colors.white,
+                                    elevation: 4,
+                                    constraints: const BoxConstraints(
+                                      minWidth: 200,
+                                      maxWidth: 220,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    style: ButtonStyle(
+                                      backgroundColor: WidgetStateProperty.all(
+                                        AppColors.white,
+                                      ),
+                                      side: WidgetStateProperty.all(
+                                        const BorderSide(
+                                          color: AppColors.primary,
+                                        ),
+                                      ),
+                                      shape: WidgetStateProperty.all(
+                                        RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                        ),
                                       ),
                                     ),
-                                  ],
+                                    onSelected: (value) {
+                                      if (value == 'riwayat') {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) =>
+                                                const PendingPaymentPage(),
+                                          ),
+                                        );
+                                      }
+                                    },
+                                    itemBuilder: (_) => const [
+                                      PopupMenuItem(
+                                        value: 'riwayat',
+                                        height: 40,
+                                        padding: EdgeInsets.symmetric(
+                                          horizontal: 16,
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Icon(
+                                              Icons.history,
+                                              size: 18,
+                                              color: AppColors.primary,
+                                            ),
+                                            SizedBox(width: 10),
+                                            Text(
+                                              'Riwayat',
+                                              style: TextStyle(
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                              ),
+                              ],
                             ),
                           ),
                         ],
@@ -898,14 +1154,13 @@ class _PesananBaruPageState extends State<PesananBaruPage>
               if (notif == null) return const SizedBox.shrink();
 
               return Positioned(
-                top: MediaQuery.of(context).padding.top + 10,
-                left: 0,
-                right: 16,
+                bottom: MediaQuery.of(context).padding.top + 15,
+                left: 20,
                 child: Align(
                   alignment: Alignment.topRight,
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(
-                      maxWidth: 440,
+                      maxWidth: 720,
                       maxHeight: 200,
                     ),
                     child: Material(
@@ -987,24 +1242,6 @@ class _PesananBaruPageState extends State<PesananBaruPage>
                                             overflow: TextOverflow.ellipsis,
                                           ),
                                         ],
-                                      ),
-                                    ),
-
-                                    // --- Close Button ---
-                                    const SizedBox(width: 4.0),
-                                    GestureDetector(
-                                      onTap: () {
-                                        // incomingNotifNotifier.value = null;
-                                      },
-                                      child: Padding(
-                                        padding: const EdgeInsets.only(
-                                          top: 2.0,
-                                        ),
-                                        child: Icon(
-                                          Icons.close_rounded,
-                                          color: Colors.grey.shade400,
-                                          size: 18.0,
-                                        ),
                                       ),
                                     ),
                                   ],

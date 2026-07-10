@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -37,6 +38,11 @@ class _ReceptionInventoryPageState extends State<ReceptionInventoryPage> {
   dynamic focusedItemId;
   bool _isPortrait = false;
 
+  /// True jika username (nama profil) mengandung "Gerai Panglima".
+  /// Menentukan tampilan tombol Realisasi Partial/Close & kolom Final Realisasi.
+  bool get isGeraiPanglima =>
+      (profile?['name'] ?? '').toString().contains('Gerai Panglima');
+
   void _toggleOrientation() {
     final toPortrait = !_isPortrait;
     setState(() => _isPortrait = toPortrait);
@@ -70,22 +76,38 @@ class _ReceptionInventoryPageState extends State<ReceptionInventoryPage> {
 
       final lines = response.data['data']['inventory_transfer_lines'];
 
-      for (final line in lines) {
-        final lineId = line['id'];
-
-        if (inventoryDetail?['approve'] == 1) {
-          realisasiControllers[lineId] = TextEditingController(
-            text: line['realisasi'].toString(),
-          );
-        } else {
-          realisasiControllers[lineId] = TextEditingController(
-            text: line['quantity'].toString(),
+      // ── DEBUG: dump lengkap inventory detail (inspeksi final realisasi) ──
+      // Hanya logging; tidak mengubah alur. debugPrint memotong ~1020 char,
+      // jadi JSON dicetak per potongan agar utuh.
+      final detail = response.data['data'];
+      debugPrint(
+        '[InventoryDetail] header keys: ${(detail as Map).keys.toList()}',
+      );
+      final encoded = const JsonEncoder.withIndent('  ').convert(detail);
+      const chunk = 800;
+      for (var i = 0; i < encoded.length; i += chunk) {
+        debugPrint(
+          '[InventoryDetail] ${encoded.substring(i, i + chunk > encoded.length ? encoded.length : i + chunk)}',
+        );
+      }
+      if (lines is List) {
+        for (var i = 0; i < lines.length; i++) {
+          final l = lines[i] as Map;
+          debugPrint(
+            '[InventoryDetail] line[$i] item=${l['item_name']} '
+            'qty=${l['quantity']} realisasi=${l['realisasi']} '
+            'reject=${l['reject']} remarks="${l['remarks']}"',
           );
         }
-
-        remarksControllers[lineId] =
-            remarksControllers[lineId] ?? TextEditingController();
       }
+      // ── AKHIR DEBUG ─────────────────────────────────────────────────────
+
+      for (final line in lines) {
+        final lineId = line['id'];
+        realisasiControllers[lineId] ??= TextEditingController();
+        remarksControllers[lineId] ??= TextEditingController();
+      }
+      _applyRealisasiDefaults();
 
       setState(() => isLoading = false);
     } catch (e, stack) {
@@ -105,6 +127,33 @@ class _ReceptionInventoryPageState extends State<ReceptionInventoryPage> {
     }
   }
 
+  /// Set nilai default kolom input realisasi.
+  /// - Sudah approve: tampilkan realisasi tersimpan.
+  /// - Gerai Panglima (belum approve): default 0 (tidak dari qty).
+  /// - Lainnya (belum approve): default sisa = quantity - realisasi.
+  ///
+  /// Dipanggil dari [getInventoryTransferDetail] (saat lines siap) dan
+  /// [getProfile] (saat profil siap), supaya hasilnya benar di urutan apa pun.
+  void _applyRealisasiDefaults() {
+    final lines = inventoryDetail?['inventory_transfer_lines'];
+    if (lines is! List) return;
+    final approved = inventoryDetail?['approve'] == 1;
+    for (final line in lines) {
+      final controller = realisasiControllers[line['id']];
+      if (controller == null) continue;
+      if (approved) {
+        controller.text = (line['realisasi'] ?? 0).toString();
+      } else if (isGeraiPanglima) {
+        controller.text = '0';
+      } else {
+        final num qty = line['quantity'] ?? 0;
+        final num realized = line['realisasi'] ?? 0;
+        final num remaining = (qty - realized) < 0 ? 0 : (qty - realized);
+        controller.text = remaining.toString();
+      }
+    }
+  }
+
   Future<void> getProfile() async {
     try {
       final response = await authService.getProfile();
@@ -115,6 +164,9 @@ class _ReceptionInventoryPageState extends State<ReceptionInventoryPage> {
         profile = response.data['data'];
         isLoadingProfile = false;
       });
+
+      // Profil baru termuat → terapkan default (mis. Gerai Panglima → 0).
+      _applyRealisasiDefaults();
     } catch (e, stack) {
       CrashReporter.report(
         e,
@@ -185,13 +237,7 @@ class _ReceptionInventoryPageState extends State<ReceptionInventoryPage> {
       final mismatchItems = getMismatchItems();
 
       if (mismatchItems.isNotEmpty) {
-        final proceed = await showRemarksModal(
-          mismatchItems,
-          int.tryParse(
-                realisasiControllers[mismatchItems.first['id']]?.text ?? '0',
-              ) ??
-              0,
-        );
+        final proceed = await showRemarksModal(mismatchItems);
         if (!proceed) return;
       }
 
@@ -247,6 +293,176 @@ class _ReceptionInventoryPageState extends State<ReceptionInventoryPage> {
     }
   }
 
+  /// Realisasi Partial (Gerai Panglima) — kirim realisasi per baris tanpa
+  /// menutup surat jalan. Tetap di halaman & reload detail agar kolom
+  /// "Final Realisasi" memperlihatkan akumulasi terbaru.
+  Future<void> submitRealisasiPartial() async {
+    try {
+      final List<dynamic> lines =
+          inventoryDetail?['inventory_transfer_lines'] ?? [];
+
+      // Validasi: input (sisa yang diterima ronde ini) + realisasi (yang sudah
+      // terealisasi) tidak boleh melebihi quantity.
+      for (final line in lines) {
+        final double qty = (line['quantity'] ?? 0).toDouble();
+        final double realized = (line['realisasi'] ?? 0).toDouble();
+        final double input =
+            double.tryParse(realisasiControllers[line['id']]?.text ?? '0') ??
+            0.0;
+        if (input + realized > qty) {
+          if (!mounted) return;
+          SnackbarUtil.show(
+            context,
+            title: "Realisasi melebihi quantity",
+            message:
+                "${line['item_name']}: total realisasi (${input + realized}) melebihi quantity ($qty).",
+            status: SnackBarStatus.error,
+          );
+          return;
+        }
+      }
+
+      // Konfirmasi dobel untuk mengurangi salah klik.
+      final confirm1 = await showConfirmModal(
+        'Konfirmasi Realisasi Partial',
+        'Simpan realisasi sebagian untuk surat jalan ini?',
+      );
+      if (!confirm1) return;
+
+      final confirm2 = await showConfirmModal(
+        'Konfirmasi Sekali Lagi',
+        'Pastikan jumlah realisasi sudah benar. Lanjut simpan?',
+      );
+      if (!confirm2) return;
+
+      // Nilai yang dikirim = input + realisasi yang sudah ada (nilai absolut baru).
+      final payloadLines = lines.map<Map<String, dynamic>>((line) {
+        final double realized = (line['realisasi'] ?? 0).toDouble();
+        final double input =
+            double.tryParse(realisasiControllers[line['id']]?.text ?? '0') ??
+            0.0;
+        return {"id": line['id'], "realisasi": input + realized};
+      }).toList();
+
+      await inventoryService.realisasiPartial(
+        inventoryDetail?['id'],
+        payloadLines,
+      );
+
+      if (!mounted) return;
+      SnackbarUtil.show(
+        context,
+        title: "Berhasil Disimpan",
+        message: "Realisasi partial berhasil disimpan",
+        status: SnackBarStatus.success,
+      );
+
+      // Reload detail (tetap di halaman) untuk menampilkan Final Realisasi baru.
+      setState(() => isLoading = true);
+      await getInventoryTransferDetail();
+    } on DioException catch (e, stack) {
+      CrashReporter.report(
+        e,
+        stack,
+        reason: 'reception_inventory_page.submitRealisasiPartial',
+        context: {
+          'endpoint': e.requestOptions.path,
+          'statusCode': e.response?.statusCode,
+          'responseData': e.response?.data?.toString(),
+        },
+      );
+      if (!mounted) return;
+      debugPrint("DioException: ${e.response?.data ?? e.message}");
+
+      // Server menolak realisasi partial yang berulang untuk item yang sama
+      // (unique constraint). Beri pesan yang lebih jelas ke kasir.
+      final String serverMsg =
+          (e.response?.data is Map ? e.response?.data['message'] : '')
+              ?.toString() ??
+          '';
+      final bool isDuplicate = serverMsg.contains('duplicate key');
+
+      SnackbarUtil.show(
+        context,
+        title: isDuplicate
+            ? "Realisasi sudah tercatat"
+            : "Gagal menyimpan realisasi partial",
+        message: isDuplicate
+            ? "Item pada surat jalan ini sudah pernah direalisasi. Gunakan \"Realisasi Close\" untuk menyelesaikan."
+            : "Terjadi kendala saat menyimpan realisasi partial. Mohon periksa koneksi atau coba kembali.",
+        status: SnackBarStatus.error,
+      );
+    }
+  }
+
+  /// Realisasi Close (Gerai Panglima) — tutup/selesaikan surat jalan.
+  /// `approve_users_id` diambil dari detail surat jalan (approver yang sudah
+  /// ditetapkan saat dibuat); fallback ke user yang sedang login bila kosong.
+  Future<void> submitRealisasiClose() async {
+    try {
+      // Konfirmasi dobel untuk mengurangi salah klik.
+      final confirm1 = await showConfirmModal(
+        'Konfirmasi Tutup Realisasi',
+        'Tutup (close) surat jalan ini? Penerimaan akan diselesaikan.',
+      );
+      if (!confirm1) return;
+
+      final confirm2 = await showConfirmModal(
+        'Konfirmasi Sekali Lagi',
+        'Setelah ditutup, surat jalan tidak bisa diubah lagi. Yakin menutup?',
+      );
+      if (!confirm2) return;
+
+      final int detailApprover =
+          (inventoryDetail?['approve_users_id'] as num?)?.toInt() ?? 0;
+      final int approveUsersId = detailApprover > 0
+          ? detailApprover
+          : ((profile?['userid'] as num?)?.toInt() ?? 0);
+
+      await inventoryService.realisasiClose(
+        inventoryDetail?['id'],
+        approveUsersId,
+      );
+
+      if (!mounted) return;
+      SnackbarUtil.show(
+        context,
+        title: "Berhasil Ditutup",
+        message: "Surat jalan berhasil ditutup",
+        status: SnackBarStatus.success,
+      );
+
+      resetNotif();
+      selectedPageInventoryNotifier.value = 1;
+      selectedPageNotifier.value = 3;
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const WidgetTree()),
+        (route) => false,
+      );
+    } on DioException catch (e, stack) {
+      CrashReporter.report(
+        e,
+        stack,
+        reason: 'reception_inventory_page.submitRealisasiClose',
+        context: {
+          'endpoint': e.requestOptions.path,
+          'statusCode': e.response?.statusCode,
+          'responseData': e.response?.data?.toString(),
+        },
+      );
+      if (!mounted) return;
+      debugPrint("DioException: ${e.response?.data ?? e.message}");
+      SnackbarUtil.show(
+        context,
+        title: "Gagal menutup surat jalan",
+        message:
+            "Terjadi kendala saat menutup surat jalan. Mohon periksa koneksi atau coba kembali.",
+        status: SnackBarStatus.error,
+      );
+    }
+  }
+
   List<Map<String, dynamic>> getMismatchItems() {
     final List<dynamic> lines =
         inventoryDetail?['inventory_transfer_lines'] ?? [];
@@ -276,7 +492,6 @@ class _ReceptionInventoryPageState extends State<ReceptionInventoryPage> {
 
   Future<bool> showRemarksModal(
     List<Map<String, dynamic>> items,
-    int realisasiQty,
   ) async {
     return await showDialog<bool>(
           context: context,
@@ -335,6 +550,14 @@ class _ReceptionInventoryPageState extends State<ReceptionInventoryPage> {
                   itemCount: items.length,
                   itemBuilder: (ctx, i) {
                     final item = items[i];
+                    // Selisih dihitung PER ITEM dari realisasi masing-masing,
+                    // bukan dari satu nilai global (penyebab bug 2872 vs 2000).
+                    final int qtyItem = (item['quantity'] as num? ?? 0).toInt();
+                    final int realisasiItem = int.tryParse(
+                          realisasiControllers[item['id']]?.text ?? '0',
+                        ) ??
+                        0;
+                    final int selisihItem = qtyItem - realisasiItem;
                     return Container(
                       margin: const EdgeInsets.only(bottom: 16),
                       padding: const EdgeInsets.all(12),
@@ -355,7 +578,7 @@ class _ReceptionInventoryPageState extends State<ReceptionInventoryPage> {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            "Selisih: ${item['quantity'] - realisasiQty} ${item['uoms_code']}",
+                            "Selisih: $selisihItem ${item['uoms_code']}",
                             style: TextStyle(
                               color: Colors.red.shade700,
                               fontSize: 12,
@@ -682,7 +905,27 @@ class _ReceptionInventoryPageState extends State<ReceptionInventoryPage> {
                                     ),
                                   ),
                                 ),
-                                if (inventoryDetail?['approve'] == 1)
+                                // Kolom Final Realisasi (hanya Gerai Panglima,
+                                // disembunyikan saat sudah "Telah Diterima").
+                                if (isGeraiPanglima &&
+                                    inventoryDetail?['approve'] != 1)
+                                  const Expanded(
+                                    flex: 2,
+                                    child: Center(
+                                      child: Text(
+                                        "Final Realisasi",
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 12,
+                                          color: Colors.green,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                // Kolom Keterangan tidak dipakai untuk Gerai.
+                                if (inventoryDetail?['approve'] == 1 &&
+                                    !isGeraiPanglima)
                                   const Expanded(
                                     flex: 3,
                                     child: Center(
@@ -780,8 +1023,28 @@ class _ReceptionInventoryPageState extends State<ReceptionInventoryPage> {
                                           valueListenable:
                                               realisasiControllers[item['id']]!,
                                           builder: (context, value, _) {
-                                            final qty = (item['quantity'] ?? 0)
-                                                .toDouble();
+                                            // Baseline pembanding warna:
+                                            // - Gerai Panglima: sisa (quantity - realisasi)
+                                            //   karena input = jumlah ronde ini.
+                                            // - Lainnya: quantity penuh.
+                                            final double qtyFull =
+                                                (item['quantity'] ?? 0)
+                                                    .toDouble();
+                                            final double realized =
+                                                (item['realisasi'] ?? 0)
+                                                    .toDouble();
+                                            // Baseline = sisa (qty - realisasi)
+                                            // HANYA saat mode input partial Gerai
+                                            // (belum approve). Saat sudah approve,
+                                            // input = realisasi absolut → baseline
+                                            // = quantity penuh (20 == 20 → biru).
+                                            final bool isPartialInput =
+                                                isGeraiPanglima &&
+                                                inventoryDetail?['approve'] !=
+                                                    1;
+                                            final qty = isPartialInput
+                                                ? (qtyFull - realized)
+                                                : qtyFull;
                                             final realisasi =
                                                 double.tryParse(value.text) ??
                                                 0;
@@ -880,7 +1143,47 @@ class _ReceptionInventoryPageState extends State<ReceptionInventoryPage> {
                                           },
                                         ),
                                       ),
-                                      if (inventoryDetail?['approve'] == 1)
+                                      // Kolom Final Realisasi (hanya Gerai Panglima;
+                                      // disembunyikan saat sudah "Telah Diterima").
+                                      // Field "realisasi" = jumlah yang sudah
+                                      // terealisasi (akumulatif) dari server.
+                                      if (isGeraiPanglima &&
+                                          inventoryDetail?['approve'] != 1)
+                                        Expanded(
+                                          flex: 2,
+                                          child: Padding(
+                                            padding: const EdgeInsets.only(
+                                              left: 8.0,
+                                            ),
+                                            child: SizedBox(
+                                              height: 45,
+                                              child: Container(
+                                                alignment: Alignment.center,
+                                                decoration: BoxDecoration(
+                                                  color: Colors.green.shade50,
+                                                  borderRadius:
+                                                      BorderRadius.circular(8),
+                                                  border: Border.all(
+                                                    color: Colors.green
+                                                        .withValues(alpha: 0.3),
+                                                  ),
+                                                ),
+                                                child: Text(
+                                                  "${item['realisasi'] ?? '-'}",
+                                                  textAlign: TextAlign.center,
+                                                  style: const TextStyle(
+                                                    color: Colors.green,
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 15,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      // Kolom Keterangan tidak dipakai untuk Gerai.
+                                      if (inventoryDetail?['approve'] == 1 &&
+                                          !isGeraiPanglima)
                                         Expanded(
                                           flex: 3,
                                           child: Padding(
@@ -956,31 +1259,99 @@ class _ReceptionInventoryPageState extends State<ReceptionInventoryPage> {
                         SizedBox(
                           width: double.infinity,
                           height: 48,
-                          child: ElevatedButton(
-                            onPressed: submitRealisasi,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.primary,
-                              foregroundColor: Colors.white,
-                              elevation: 0,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                            child: const Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.check_circle_outline),
-                                SizedBox(width: 8),
-                                Text(
-                                  'Konfirmasi Terima Barang',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
+                          child: isGeraiPanglima
+                              ? Row(
+                                  children: [
+                                    // Tombol kiri: Realisasi Partial
+                                    Expanded(
+                                      child: ElevatedButton(
+                                        onPressed: submitRealisasiPartial,
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: AppColors.primary,
+                                          foregroundColor: Colors.white,
+                                          elevation: 0,
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
+                                          ),
+                                        ),
+                                        child: const Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          children: [
+                                            Icon(Icons.save_outlined),
+                                            SizedBox(width: 8),
+                                            Text(
+                                              'Realisasi Partial',
+                                              style: TextStyle(
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    // Tombol kanan: Realisasi Close
+                                    Expanded(
+                                      child: ElevatedButton(
+                                        onPressed: submitRealisasiClose,
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: AppColors.primary,
+                                          foregroundColor: Colors.white,
+                                          elevation: 0,
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
+                                          ),
+                                        ),
+                                        child: const Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          children: [
+                                            Icon(Icons.check_circle_outline),
+                                            SizedBox(width: 8),
+                                            Text(
+                                              'Realisasi Close',
+                                              style: TextStyle(
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                )
+                              : ElevatedButton(
+                                  onPressed: submitRealisasi,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppColors.primary,
+                                    foregroundColor: Colors.white,
+                                    elevation: 0,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                  ),
+                                  child: const Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.check_circle_outline),
+                                      SizedBox(width: 8),
+                                      Text(
+                                        'Konfirmasi Terima Barang',
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
-                              ],
-                            ),
-                          ),
                         ),
                       ],
                     ),

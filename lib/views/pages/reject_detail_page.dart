@@ -120,10 +120,6 @@ class _RejectDetailPageState extends State<RejectDetailPage> {
       final data = res.data['data'] as Map<String, dynamic>;
       final lines = (data['lines'] as List?) ?? [];
       final lampirans = (data['lampirans'] as List?) ?? [];
-      debugPrint(
-        '[REJECT-DETAIL] loaded id=${widget.id}, '
-        'lines=${lines.length}, lampirans=${lampirans.length}',
-      );
 
       // Buat map: reject_lines_id → lampiran_id
       // (file_url sekarang diambil dari masing-masing line, bukan dari lampirans)
@@ -132,15 +128,10 @@ class _RejectDetailPageState extends State<RejectDetailPage> {
         final lm = l as Map;
         final lampiranId = (lm['id'] as num?)?.toInt();
         final rejectLinesId = (lm['reject_lines_id'] as num?)?.toInt();
-        debugPrint(
-          '[REJECT-DETAIL] lampiran raw → id=$lampiranId, '
-          'reject_lines_id=$rejectLinesId',
-        );
         if (lampiranId != null && rejectLinesId != null) {
           lampiranIdMap[rejectLinesId] = lampiranId;
         }
       }
-      debugPrint('[REJECT-DETAIL] lampiranIdMap built: $lampiranIdMap');
 
       _hashtagType = data['hashtag_type']?.toString();
       final rawDate = data['tgl_reject']?.toString();
@@ -172,10 +163,6 @@ class _RejectDetailPageState extends State<RejectDetailPage> {
             if (lampiranId != null) {
               entry.lampiranId = lampiranId;
             }
-            debugPrint(
-              '[REJECT-DETAIL] line ${entry.lineId} → '
-              'lampiranId=$lampiranId, file_url="$lineFileUrl"',
-            );
           }
           entry.itemId = (m['item_id'] as num?)?.toInt();
           entry.itemCode = (m['code'] ?? m['item_code'])?.toString();
@@ -206,20 +193,8 @@ class _RejectDetailPageState extends State<RejectDetailPage> {
           _items.add(_createItem());
         }
       });
-
-      // Fetch lampiran untuk setiap baris yang memiliki lampiran
-      // (cek seluruh items, bukan length-1, karena draft kosong sudah otomatis
-      // di-skip oleh kondisi url null/empty)
-      debugPrint(
-        '[REJECT-DETAIL] _items.length=${_items.length}, '
-        'isLocked=$_isLocked',
-      );
       for (int i = 0; i < _items.length; i++) {
         final url = _items[i].lampiranUrl;
-        debugPrint(
-          '[REJECT-DETAIL] check item[$i] '
-          'lineId=${_items[i].lineId}, url="$url"',
-        );
         if (url != null && url.isNotEmpty) _fetchLampiran(i);
       }
     } catch (e, stack) {
@@ -285,30 +260,14 @@ class _RejectDetailPageState extends State<RejectDetailPage> {
     return entry;
   }
 
-  /// Extract list of items from API response. Handles both shapes:
+  /// Endpoint `/pos/reject/$id/items` bisa balikin 2 shape:
   /// - `{data: [...]}` (direct list)
   /// - `{data: {data: [...], metadata: {...}}}` (paginated wrapper)
   List<dynamic> _extractItemsList(dynamic raw) {
-    debugPrint('[CATALOG-EXTRACT] raw.runtimeType=${raw.runtimeType}');
-    if (raw is Map) {
-      debugPrint('[CATALOG-EXTRACT] raw keys=${raw.keys.toList()}');
-      final data = raw['data'];
-      debugPrint('[CATALOG-EXTRACT] data.runtimeType=${data.runtimeType}');
-      if (data is List) {
-        debugPrint('[CATALOG-EXTRACT] direct list, length=${data.length}');
-        return data;
-      }
-      if (data is Map) {
-        debugPrint('[CATALOG-EXTRACT] data is Map, keys=${data.keys.toList()}');
-        final nested = data['data'];
-        debugPrint('[CATALOG-EXTRACT] nested.runtimeType=${nested.runtimeType}');
-        if (nested is List) {
-          debugPrint('[CATALOG-EXTRACT] nested list, length=${nested.length}');
-          return nested;
-        }
-      }
-    }
-    debugPrint('[CATALOG-EXTRACT] FALLBACK empty');
+    if (raw is! Map) return const [];
+    final data = raw['data'];
+    if (data is List) return data;
+    if (data is Map && data['data'] is List) return data['data'] as List;
     return const [];
   }
 
@@ -316,20 +275,8 @@ class _RejectDetailPageState extends State<RejectDetailPage> {
     if (index >= _items.length) return;
     setState(() => _items[index].isCatalogSearching = true);
     try {
-      debugPrint(
-        '[CATALOG-SEARCH] START rejectId=${widget.id}, '
-        'query="$query", index=$index',
-      );
       final res = await rejectService.getListItems(widget.id, search: query);
-      debugPrint(
-        '[CATALOG-SEARCH] status=${res.statusCode}, '
-        'data=${res.data.toString().substring(0, res.data.toString().length.clamp(0, 500))}',
-      );
       final list = _extractItemsList(res.data);
-      debugPrint('[CATALOG-SEARCH] parsed list.length=${list.length}');
-      if (list.isNotEmpty) {
-        debugPrint('[CATALOG-SEARCH] first item=${list.first}');
-      }
       if (mounted && index < _items.length) {
         setState(() {
           _items[index].filteredCatalog = list
@@ -343,14 +290,8 @@ class _RejectDetailPageState extends State<RejectDetailPage> {
               .toList();
           _items[index].isCatalogSearching = false;
         });
-        debugPrint(
-          '[CATALOG-SEARCH] DONE filteredCatalog.length='
-          '${_items[index].filteredCatalog?.length}',
-        );
       }
     } catch (e, stack) {
-      debugPrint('[CATALOG-SEARCH] ERROR: $e');
-      debugPrint(stack.toString());
       CrashReporter.report(e, stack, reason: 'reject_detail.searchItems');
       if (mounted && index < _items.length) {
         setState(() => _items[index].isCatalogSearching = false);
@@ -361,20 +302,8 @@ class _RejectDetailPageState extends State<RejectDetailPage> {
   Future<void> _loadCatalog() async {
     setState(() => _catalogLoading = true);
     try {
-      debugPrint('[CATALOG-LOAD] START rejectId=${widget.id}');
       final res = await rejectService.getListItems(widget.id);
-      debugPrint(
-        '[CATALOG-LOAD] status=${res.statusCode}, '
-        'requestPath=${res.requestOptions.path}',
-      );
-      debugPrint(
-        '[CATALOG-LOAD] data=${res.data.toString().substring(0, res.data.toString().length.clamp(0, 500))}',
-      );
       final list = _extractItemsList(res.data);
-      debugPrint('[CATALOG-LOAD] parsed list.length=${list.length}');
-      if (list.isNotEmpty) {
-        debugPrint('[CATALOG-LOAD] first item=${list.first}');
-      }
       if (mounted) {
         setState(() {
           _catalog = list
@@ -387,11 +316,8 @@ class _RejectDetailPageState extends State<RejectDetailPage> {
               )
               .toList();
         });
-        debugPrint('[CATALOG-LOAD] DONE _catalog.length=${_catalog.length}');
       }
     } catch (e, stack) {
-      debugPrint('[CATALOG-LOAD] ERROR: $e');
-      debugPrint(stack.toString());
       CrashReporter.report(e, stack, reason: 'reject_detail.loadCatalog');
     } finally {
       if (mounted) setState(() => _catalogLoading = false);
@@ -469,16 +395,9 @@ class _RejectDetailPageState extends State<RejectDetailPage> {
       debugPrint('[REJECT-FETCH] skip index=$index, url is null/empty');
       return;
     }
-    debugPrint('[REJECT-FETCH] START index=$index, url="$url"');
     if (mounted) setState(() => item.isLoadingLampiran = true);
     try {
       final res = await rejectService.getLampiran(url);
-      debugPrint(
-        '[REJECT-FETCH] response index=$index, '
-        'status=${res.statusCode}, '
-        'content-type=${res.headers.value('content-type')}, '
-        'runtimeType=${res.data.runtimeType}',
-      );
 
       final raw = res.data;
       Uint8List? bytes;
@@ -492,7 +411,6 @@ class _RejectDetailPageState extends State<RejectDetailPage> {
           'Sample: ${raw.toString().substring(0, raw.toString().length.clamp(0, 200))}',
         );
       }
-      debugPrint('[REJECT-FETCH] bytes.length=${bytes?.length ?? 0}');
 
       if (!mounted) return;
       setState(() {
@@ -1417,9 +1335,12 @@ class _RejectDetailPageState extends State<RejectDetailPage> {
 
   @override
   Widget build(BuildContext context) {
+    final tglDate = _tglReject != null
+        ? (DateTime.tryParse(_tglReject!) ?? DateTime.now())
+        : DateTime.now();
     final today = _localeReady
-        ? DateFormat('dd MMM yyyy', 'id_ID').format(DateTime.now())
-        : DateFormat('dd MMM yyyy').format(DateTime.now());
+        ? DateFormat('dd MMM yyyy', 'id_ID').format(tglDate)
+        : DateFormat('dd MMM yyyy').format(tglDate);
 
     final keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
     final isKeyboardVisible = keyboardHeight > 0;

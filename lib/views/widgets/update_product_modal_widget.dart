@@ -3,10 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:pos_panglima_app/services/cart_service.dart';
 import 'package:pos_panglima_app/services/helper/dio_client.dart';
 import 'dart:async';
+import 'package:pos_panglima_app/services/network_service.dart';
+import 'package:pos_panglima_app/services/storage/offline_stock_service.dart';
 import 'package:pos_panglima_app/services/storage/shift_storage_service.dart';
 import 'package:pos_panglima_app/utils/app_colors.dart';
 import 'package:pos_panglima_app/utils/convert.dart';
 import 'package:pos_panglima_app/utils/crash_reporter.dart';
+import 'package:pos_panglima_app/utils/modal_insufficient_stock.dart';
 import 'package:pos_panglima_app/utils/snackbar_util.dart';
 import 'package:pos_panglima_app/views/components/ui/step_button.dart';
 
@@ -197,6 +200,7 @@ class _UpdateProductModalWidgetState extends State<UpdateProductModalWidget> {
         : discount;
 
     if (totalDiscount > subtotal) {
+      if (mounted) setState(() => isSubmitting = false);
       SnackbarUtil.show(
         context,
         title: 'Diskon tidak valid',
@@ -219,6 +223,12 @@ class _UpdateProductModalWidgetState extends State<UpdateProductModalWidget> {
       "pos_cart_props": mergedProps,
     };
 
+    // ── MODE OFFLINE ──────────────────────────────────────────────────────
+    if (!await NetworkService.isOnline()) {
+      await _updateToCartOffline(id, discount, subtotal, tax, totalDiscount);
+      return;
+    }
+
     try {
       await cartService.updateCart(id, payload);
       if (!mounted) return;
@@ -240,6 +250,76 @@ class _UpdateProductModalWidgetState extends State<UpdateProductModalWidget> {
       );
     } finally {
       if (mounted) setState(() => isSubmitting = false);
+    }
+  }
+
+  /// Update baris cart di local storage saat offline, dengan validasi stok BOM.
+  Future<void> _updateToCartOffline(
+    int id,
+    int discount,
+    int subtotal,
+    int tax,
+    int totalDiscount,
+  ) async {
+    // Varian terpilih (qty > 0), lengkap dengan nama untuk ditampilkan di tile.
+    final offlineProps = _renderProps
+        .where((p) => (selectedProps[p['id']] ?? 0) > 0)
+        .map<Map<String, dynamic>>((p) => {
+              'pos_menus_id': p['id'],
+              'pos_menus_name': p['title'],
+              'quantity': selectedProps[p['id']] ?? 0,
+            })
+        .toList();
+
+    final updatedItem = <String, dynamic>{
+      'id': id,
+      'pos_menus_id': widget.posMenusId,
+      'pos_menus_name': widget.posMenusName,
+      'quantity': quantity,
+      'price': widget.price,
+      'subtotal': subtotal,
+      'tax': tax,
+      'is_percentage': selectedUnit ? 1 : 0,
+      'discount': selectedUnit ? 0 : discount,
+      'discount_val': selectedUnit ? discount : 0,
+      'total': subtotal - totalDiscount + tax,
+      'max_qty': widget.maxQty,
+      'image_url': widget.imageUrl,
+      'pos_cart_props': offlineProps,
+    };
+
+    try {
+      // Validasi stok: cart prospektif = cart saat ini dengan baris ini diganti.
+      final currentCart = await OfflineStockService.getCartSnapshot();
+      final prospective = currentCart
+          .map((c) => c['id'] == id ? updatedItem : c)
+          .toList();
+      final lacking = await OfflineStockService.validateDetailed(prospective);
+      if (lacking.isNotEmpty) {
+        if (!mounted) return;
+        setState(() => isSubmitting = false);
+        showDialog(
+          context: context,
+          builder: (_) => ModalInsufficientStock(items: lacking),
+        );
+        return;
+      }
+
+      await OfflineStockService.updateCartItem(id, updatedItem);
+      if (!mounted) return;
+      widget.onSaved();
+      Navigator.of(context).pop();
+    } catch (e, stack) {
+      CrashReporter.report(e, stack,
+          reason: 'update_product_modal_widget.updateToCartOffline');
+      if (!mounted) return;
+      setState(() => isSubmitting = false);
+      SnackbarUtil.show(
+        context,
+        title: 'Update gagal',
+        message: 'Tidak dapat memperbarui item di keranjang offline.',
+        status: SnackBarStatus.error,
+      );
     }
   }
 

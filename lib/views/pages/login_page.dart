@@ -1,16 +1,21 @@
 import 'dart:async';
 
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
+import 'package:pos_panglima_app/data/notifiers.dart';
 import 'package:pos_panglima_app/services/auth_service.dart';
+import 'package:pos_panglima_app/services/fcm_token_service.dart';
 import 'package:pos_panglima_app/services/helper/dio_client.dart';
+import 'package:pos_panglima_app/services/method_service.dart';
 import 'package:pos_panglima_app/services/shift_service.dart';
+import 'package:pos_panglima_app/services/storage/method_storage_service.dart';
+import 'package:pos_panglima_app/services/storage/profile_storage_service.dart';
 import 'package:pos_panglima_app/services/storage/shift_storage_service.dart';
 import 'package:pos_panglima_app/utils/app_colors.dart';
 import 'package:pos_panglima_app/utils/crash_reporter.dart';
 import 'package:pos_panglima_app/utils/snackbar_util.dart';
 import 'package:pos_panglima_app/views/widgets/start_shift_modal.dart';
 import 'package:pos_panglima_app/views/widgets_tree.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key, required this.title});
@@ -93,6 +98,49 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
+  /// Simpan profil pengguna & metode pembayaran/pesanan ke local storage saat
+  /// login, supaya halaman pembayaran tetap berfungsi dan payload order tetap
+  /// benar saat offline. Setiap login ulang menimpa data lama.
+  /// Best-effort: setiap kegagalan dilaporkan tapi tidak menggagalkan login.
+  Future<void> _cacheOfflineEssentials(Map<String, dynamic> loginData) async {
+    // Profil: ambil dari endpoint profile (sumber yang sama dengan payment page)
+    // agar nama, userid, dan customer/outlet id konsisten.
+    try {
+      final profileRes = await authService.getProfile();
+      final p = profileRes.data['data'];
+      final uid = p?['userid'] ?? loginData['id'];
+      final userIdInt =
+          uid is int ? uid : int.tryParse(uid?.toString() ?? '') ?? 0;
+      final customerSource = p?['customer'] ?? loginData['customer'];
+      final customerId =
+          (customerSource is List && customerSource.isNotEmpty)
+              ? customerSource[0].toString()
+              : null;
+      await ProfileStorageService.save(
+        userId: userIdInt,
+        userName: (p?['name'] ?? '').toString(),
+        customerId: customerId,
+      );
+    } catch (e, stack) {
+      CrashReporter.report(e, stack, reason: 'login_page._cacheProfile');
+    }
+
+    // Metode pembayaran & pesanan untuk halaman pembayaran offline.
+    try {
+      final methodService = MethodService(apiClient.dio);
+      final results = await Future.wait([
+        methodService.getPaymentMethods(),
+        methodService.getOrderMethods(),
+      ]);
+      await MethodStorageService.save(
+        List.from(results[0].data['data'] ?? []),
+        List.from(results[1].data['data'] ?? []),
+      );
+    } catch (e, stack) {
+      CrashReporter.report(e, stack, reason: 'login_page._cacheMethods');
+    }
+  }
+
   Future<void> login() async {
     if (controllerEmail.text.isEmpty || controllerPw.text.isEmpty) {
       SnackbarUtil.show(
@@ -132,24 +180,35 @@ class _LoginPageState extends State<LoginPage> {
 
       await apiClient.saveToken(data['token']);
 
-      final fcmToken = await FirebaseMessaging.instance.getToken();
+      // Provisioning data untuk mode offline (profil pengguna + metode
+      // pembayaran/pesanan). Best-effort: kegagalan tidak memblok login.
+      await _cacheOfflineEssentials(data);
 
-      try {
-        if (fcmToken != null) {
-          await authService.postFcmToken({
-            "users_id": data['id'],
-            "fcm_token": fcmToken,
-            "tipe": "android",
-          });
-        }
-      } catch (fcmError, stack) {
-        debugPrint("FCM Error: $fcmError");
-        CrashReporter.report(
-          fcmError,
-          stack,
-          reason: 'login_page.postFcmToken',
-        );
+      // Simpan alamat outlet dari customer_info[0].address untuk dipakai
+      // di struk cetak (bluetooth_printer_service). Defensive parsing —
+      // kalau field tidak ada, simpan string kosong.
+      final customerInfo = data['customer_info'];
+      String outletAddress = '';
+      if (customerInfo is List && customerInfo.isNotEmpty) {
+        outletAddress = (customerInfo[0]['address'] ?? '').toString();
       }
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('outlet_address', outletAddress);
+
+      // Simpan users_id supaya FcmTokenService bisa sync token di kemudian hari
+      // (saat onTokenRefresh atau retry di startup).
+      final dynamic uid = data['id'];
+      final int? userIdInt = uid is int
+          ? uid
+          : int.tryParse(uid?.toString() ?? '');
+      if (userIdInt != null) {
+        await FcmTokenService.saveUsersId(userIdInt);
+      }
+
+      // Fire-and-forget: FCM sync best-effort, tidak boleh memblok login flow
+      // atau abort login kalau gagal.
+      // ignore: unawaited_futures
+      FcmTokenService.syncToken();
 
       if (!mounted) return;
 
@@ -159,6 +218,7 @@ class _LoginPageState extends State<LoginPage> {
       if (!mounted) return;
 
       if (activeShift != null) {
+        selectedPageNotifier.value = 0;
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (_) => const WidgetTree()),
@@ -166,7 +226,6 @@ class _LoginPageState extends State<LoginPage> {
         return;
       }
 
-      // Menampilkan modal shift setelah login berhasil
       showDialog(
         context: context,
         barrierDismissible: false,
@@ -184,11 +243,12 @@ class _LoginPageState extends State<LoginPage> {
       );
     } finally {
       _loginTimer?.cancel();
-      if (mounted)
+      if (mounted) {
         setState(() {
           loading = false;
           _loginTimedOut = false;
         });
+      }
     }
   }
 

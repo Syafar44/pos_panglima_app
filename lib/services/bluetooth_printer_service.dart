@@ -391,6 +391,58 @@ class BluetoothPrinterService {
 
   // ─── Print ─────────────────────────────────────────────────────────────────
 
+  /// Cetak teks dengan ukuran custom via raw ESC/POS command.
+  ///
+  /// Memberikan kontrol jauh lebih halus daripada `printCustom(text, size, align)`
+  /// bawaan plugin (yang hanya menyediakan 6 preset 0-5).
+  ///
+  /// - [widthX]: pengali lebar karakter, 1..8 (1 = normal, 8 = sangat lebar).
+  /// - [heightX]: pengali tinggi karakter, 1..8 (1 = normal, 8 = sangat tinggi).
+  /// - [align]: 0 = left, 1 = center, 2 = right.
+  ///
+  /// Contoh ukuran umum:
+  /// - Body normal: `printSized(text, 1, 1, 0)`
+  /// - Header sedang: `printSized(text, 2, 2, 1)`
+  /// - Total bayar besar: `printSized(text, 2, 3, 1)` (lebar 2x, tinggi 3x)
+  /// - Heading sangat besar: `printSized(text, 3, 3, 1)`
+  ///
+  /// Setelah cetak, ukuran & align di-reset ke default supaya tidak bocor ke
+  /// `printCustom` berikutnya.
+  static Future<void> printSized(
+    String text,
+    int widthX,
+    int heightX,
+    int align,
+  ) async {
+    final w = widthX.clamp(1, 8);
+    final h = heightX.clamp(1, 8);
+    final n = ((w - 1) << 4) | (h - 1);
+    final a = align.clamp(0, 2);
+
+    // ESC a <align>  → set alignment
+    // GS  ! <n>      → set char size (high nibble = width, low nibble = height)
+    // <text>\n
+    // GS  ! 0        → reset size
+    // ESC a 0        → reset align ke left
+    final bytes = Uint8List.fromList([
+      0x1B,
+      0x61,
+      a,
+      0x1D,
+      0x21,
+      n,
+      ...text.codeUnits,
+      0x0A,
+      0x1D,
+      0x21,
+      0x00,
+      0x1B,
+      0x61,
+      0x00,
+    ]);
+    await bluetooth.writeBytes(bytes);
+  }
+
   static Future<void> printLogo({required String usersName}) async {
     final lower = usersName.toLowerCase();
     String assetPath;
@@ -422,12 +474,16 @@ class BluetoothPrinterService {
     required int subTotal,
     int? payment,
     String? paymentMethod,
+    bool? isCopy,
+    String? dateTime,
     required bool isPayment,
   }) async {
     bool? isConn = await bluetooth.isConnected;
 
     if (isConn != true) {
-      debugPrint("Printer belum terhubung! Melewati cetak (antrian dinonaktifkan).");
+      debugPrint(
+        "Printer belum terhubung! Melewati cetak (antrian dinonaktifkan).",
+      );
       // [QUEUE-DISABLED] Simpan ke antrian belum diaktifkan
       // _printQueue.add({
       //   'documentNumber': documentNumber,
@@ -459,6 +515,8 @@ class BluetoothPrinterService {
       payment: payment,
       paymentMethod: paymentMethod,
       isPayment: isPayment,
+      isCopy: isCopy,
+      dateTime: dateTime,
     );
   }
 
@@ -474,6 +532,8 @@ class BluetoothPrinterService {
     int? payment,
     String? paymentMethod,
     required bool isPayment,
+    bool? isCopy = false,
+    String? dateTime,
   }) async {
     final lower = usersName.toLowerCase();
 
@@ -484,48 +544,81 @@ class BluetoothPrinterService {
       "id_ID",
     ).format(DateTime.now());
 
-    String pelanggan = 'General Pelanggan';
+    // Tanggal transaksi untuk struk copy (re-print dari riwayat). `dateTime`
+    // berupa string ISO (mis. created_at). Untuk struk live (bukan copy) pakai
+    // waktu sekarang. Format tanpa toLocal agar konsisten dengan tampilan riwayat.
+    String trxDate = date;
+    if (isCopy == true && dateTime != null && dateTime.isNotEmpty) {
+      final parsed = DateTime.tryParse(dateTime);
+      if (parsed != null) {
+        trxDate = DateFormat("d MMM yyyy, HH.mm", "id_ID").format(parsed);
+      }
+    }
 
-    await printLogo(usersName: usersName);
+    String pelanggan = 'General Pelanggan';
+    String user = usersName.replaceFirst(RegExp(r'^Kasir\s+'), '');
+
+    // Alamat outlet disimpan oleh login_page ke key 'outlet_address'.
+    final prefs = await SharedPreferences.getInstance();
+    final address = prefs.getString('outlet_address') ?? '';
+
+    await printLogo(usersName: user);
+    bluetooth.printCustom(user, 5, 1);
     bluetooth.printNewLine();
-    bluetooth.printCustom(usersName, 1, 1);
+    if (address.isNotEmpty) {
+      bluetooth.printCustom(address, 0, 1);
+    }
 
     bluetooth.printCustom('--------------------------------', 1, 0);
     bluetooth.printCustom('ID Pesanan : $documentNumber', 0, 0);
     bluetooth.printCustom('Pelangan   : $pelanggan', 0, 0);
-    bluetooth.printCustom('Transaksi  : $date', 0, 0);
+    bluetooth.printCustom('Transaksi  : $trxDate', 0, 0);
+    if (isCopy == true) {
+      bluetooth.printCustom('--------------------------------', 1, 0);
+      bluetooth.printCustom("Copy - $date", 0, 1);
+    }
     bluetooth.printCustom('--------------------------------', 1, 0);
     bluetooth.printCustom(method, 0, 1);
     bluetooth.printCustom('--------------------------------', 1, 0);
 
-    listProduk.map((e) {
+    for (final e in listProduk) {
       bluetooth.printCustom(e['pos_menus_name'], 1, 0);
+
+      // Variant items dari cart (saat re-print dari cart) — `pos_cart_props`.
       if (isPayment) {
-        final dynamic listProps = e['pos_cart_props'];
-        listProps.forEach((e) {
-          bluetooth.printCustom(
-            ' ${e['quantity']}x ${e['pos_menus_name']}',
-            0,
-            0,
-          );
-        });
-      } else {
-        final dynamic listProps = e['pos_order_lines_material'];
-        listProps.forEach((e) {
-          bluetooth.printCustom(
-            '   ${e['quantity']}x ${e['items_name']}',
-            0,
-            0,
-          );
-        });
+        final dynamic cartProps = e['pos_cart_props'];
+        if (cartProps is List) {
+          for (final prop in cartProps) {
+            bluetooth.printCustom(
+              '   ${prop['quantity']}x ${prop['pos_menus_name']}',
+              0,
+              0,
+            );
+          }
+        }
       }
+
+      // Variant items dari order response — `pos_order_lines_props`.
+      // Format sama: " <qty>x <nama_variant>" per baris.
+      final dynamic orderLinesProps = e['pos_order_lines_props'];
+      if (orderLinesProps is List) {
+        for (final prop in orderLinesProps) {
+          bluetooth.printCustom(
+            '   ${prop['quantity']}x ${prop['pos_menus_name']}',
+            0,
+            0,
+          );
+        }
+      }
+
+      // pos_order_lines_material (packaging dll.) tidak ditampilkan di struk
       bluetooth.printLeftRight(
         ' ${e['quantity']} x ${convertIDR(e['price'])}',
         convertIDR(e['price'] * e['quantity']),
         0,
       );
       bluetooth.printNewLine();
-    }).toString();
+    }
 
     bluetooth.printCustom('--------------------------------', 1, 0);
     bluetooth.printLeftRight('Jumlah Item :', '$totalQuantity', 0);
@@ -539,7 +632,7 @@ class BluetoothPrinterService {
       );
     }
     bluetooth.printCustom('--------------------------------', 1, 0);
-    bluetooth.printCustom('Total : ${convertIDR(totalPayment)}', 1, 2);
+    bluetooth.printCustom('Total : ${convertIDR(totalPayment)}', 3, 2);
     bluetooth.printCustom('--------------------------------', 1, 0);
 
     if (isCash == true) {

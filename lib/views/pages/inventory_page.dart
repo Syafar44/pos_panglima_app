@@ -997,7 +997,7 @@ class _InventoryPageState extends State<InventoryPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'Daily Stcok Opname',
+                    'Daily Stock Opname',
                     style: TextStyle(
                       fontSize: 18.0,
                       fontWeight: FontWeight.bold,

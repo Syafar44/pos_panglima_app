@@ -182,7 +182,9 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
         totalPayment: orderDetail?['total_amount'],
         subTotal: orderDetail?['subtotal_amount'],
         payment: orderDetail?['pay_amount'],
+        dateTime: orderDetail?['created_at'],
         isPayment: false,
+        isCopy: true,
       );
     } catch (e, stack) {
       CrashReporter.report(e, stack, reason: 'riwayat_penjualan_page.handlePrintStruk');

@@ -1,5 +1,5 @@
 class AppConfig {
-  static const String version = '2.0.5';
+  static const String version = '2.1.14';
   static const String whatsapp = '082220002237';
   static const String instagramRGP = '@rotigembungpanglima';
   static const String instagramGP = '@geraipanglima';

@@ -223,6 +223,7 @@ class _LaporanPageState extends State<LaporanPage> {
             ],
           ),
         ),
+        const SizedBox(height: 16),
         // Padding(
         //   padding: const EdgeInsets.all(20.0),
         //   child: Row(
@@ -236,6 +237,7 @@ class _LaporanPageState extends State<LaporanPage> {
         //     ],
         //   ),
         // ),
+        const SizedBox(height: 16),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20.0),
           child: Column(

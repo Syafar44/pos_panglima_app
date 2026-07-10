@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:pos_panglima_app/utils/app_colors.dart';
 import 'package:pos_panglima_app/data/app_config.dart';
 import 'package:pos_panglima_app/data/notifiers.dart';
+import 'package:pos_panglima_app/services/network_service.dart';
+import 'package:pos_panglima_app/services/offline_sync_manager.dart';
 import 'package:pos_panglima_app/services/storage/shift_storage_service.dart';
+import 'package:pos_panglima_app/utils/snackbar_util.dart';
 import 'package:pos_panglima_app/views/pages/login_page.dart';
 import 'package:pos_panglima_app/views/widgets/end_shift_modal.dart';
 import 'package:pos_panglima_app/views/widgets/log_viewer_sheet.dart';
@@ -61,16 +64,43 @@ class _DrawerWidgetState extends State<DrawerWidget>
   void _handlePress() async {
     if (_controller.isAnimating) return;
 
-    _controller.forward(from: 0.0);
+    // Putar ikon selama proses berjalan.
+    _controller.repeat();
 
-    await Future.delayed(const Duration(seconds: 1));
+    final online = await NetworkService.isOnline();
 
-    if (mounted) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (context) => const WidgetTree()),
-      );
+    // Tarik snapshot stok + BOM dan simpan ke lokal (sama dengan siklus 5 menit),
+    // sekaligus flush antrian order & lampiran. Manual refresh = ambil stok terbaru.
+    if (online) {
+      await OfflineSyncManager.syncNow();
     }
+
+    _controller.stop();
+    _controller.reset();
+
+    if (!mounted) return;
+
+    if (!online) {
+      SnackbarUtil.show(
+        context,
+        title: 'Tidak Ada Koneksi',
+        message: 'Stok tidak bisa diperbarui saat offline.',
+        status: SnackBarStatus.warning,
+      );
+      return;
+    }
+
+    SnackbarUtil.show(
+      context,
+      title: 'Stok Diperbarui',
+      message: 'Data stok terbaru berhasil disimpan.',
+      status: SnackBarStatus.success,
+    );
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const WidgetTree()),
+    );
   }
 
   @override

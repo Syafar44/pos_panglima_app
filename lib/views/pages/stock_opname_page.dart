@@ -27,6 +27,9 @@ class _StockOpnameItem {
   final TextEditingController qtyController;
   final TextEditingController remarksController;
 
+  int _baselineQty;
+  String _baselineRemarks;
+
   _StockOpnameItem({
     required this.id,
     required this.itemCode,
@@ -38,7 +41,20 @@ class _StockOpnameItem {
   }) : qtyController = TextEditingController(
          text: actualQty > 0 ? '$actualQty' : '',
        ),
-       remarksController = TextEditingController(text: remarks);
+       remarksController = TextEditingController(text: remarks),
+       _baselineQty = actualQty,
+       _baselineRemarks = remarks;
+
+  bool get isDirty {
+    final currentQty = int.tryParse(qtyController.text.trim()) ?? 0;
+    return currentQty != _baselineQty ||
+        remarksController.text.trim() != _baselineRemarks;
+  }
+
+  void commitBaseline() {
+    _baselineQty = int.tryParse(qtyController.text.trim()) ?? 0;
+    _baselineRemarks = remarksController.text.trim();
+  }
 
   void dispose() {
     qtyController.dispose();
@@ -159,6 +175,113 @@ class _StockOpnamePageState extends State<StockOpnamePage> {
     return status != 'draft';
   }
 
+  bool _hasUnsavedChanges() {
+    if (_isReadOnly()) return false;
+    return items.any((item) => item.isDirty);
+  }
+
+  void _navigateBack() {
+    isBackSO.value = false;
+    selectedPageInventoryNotifier.value = 2;
+    selectedPageNotifier.value = 3;
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => const WidgetTree()),
+      (route) => false,
+    );
+  }
+
+  Future<void> _handleBack() async {
+    if (!_hasUnsavedChanges()) {
+      _navigateBack();
+      return;
+    }
+
+    final action = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        icon: const Icon(
+          Icons.warning_amber_rounded,
+          size: 48,
+          color: Colors.orange,
+        ),
+        title: const Text(
+          'Perubahan Belum Disimpan',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: Colors.black87,
+          ),
+        ),
+        content: const Text(
+          'Ada perubahan yang belum disimpan sebagai draft. '
+          'Simpan draft terlebih dahulu sebelum keluar?',
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 14, color: Colors.black54, height: 1.5),
+        ),
+        actionsPadding: const EdgeInsets.only(
+          bottom: 24,
+          left: 20,
+          right: 20,
+          top: 10,
+        ),
+        actions: [
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    side: BorderSide(color: Colors.grey.shade300),
+                  ),
+                  onPressed: () => Navigator.pop(ctx, 'cancel'),
+                  child: const Text(
+                    'Batal',
+                    style: TextStyle(
+                      color: Colors.black87,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  onPressed: () => Navigator.pop(ctx, 'save'),
+                  child: const Text(
+                    'Simpan Draft',
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+
+    if (action == 'save') {
+      await _saveDraft();
+      if (!mounted) return;
+      if (!_hasUnsavedChanges()) _navigateBack();
+    }
+  }
+
   Future<void> _saveDraft() async {
     if (_isReadOnly()) return;
     if (isSaving || isSubmitting) return;
@@ -168,6 +291,9 @@ class _StockOpnamePageState extends State<StockOpnamePage> {
         'lines': items.map((item) => item.toUpdatePayload()).toList(),
       };
       await stockOpnameService.updateDraftSO(widget.id, payload);
+      for (final item in items) {
+        item.commitBaseline();
+      }
       if (!mounted) return;
       SnackbarUtil.show(
         context,
@@ -376,6 +502,9 @@ class _StockOpnamePageState extends State<StockOpnamePage> {
       await stockOpnameService.updateDraftSO(widget.id, {
         'lines': items.map((item) => item.toUpdatePayload()).toList(),
       });
+      for (final item in items) {
+        item.commitBaseline();
+      }
       await stockOpnameService.submitSO(widget.id);
       if (!mounted) return;
       SnackbarUtil.show(
@@ -412,58 +541,56 @@ class _StockOpnamePageState extends State<StockOpnamePage> {
   }
 
   Widget _buildScaffold(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F7),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: AppColors.textDark,
-        elevation: 0,
-        centerTitle: true,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () {
-            isBackSO.value = false;
-            selectedPageInventoryNotifier.value = 2;
-            selectedPageNotifier.value = 3;
-            Navigator.pushAndRemoveUntil(
-              context,
-              MaterialPageRoute(builder: (_) => const WidgetTree()),
-              (route) => false,
-            );
-          },
-          tooltip: 'Kembali ke Menu Utama',
-        ),
-        title: Text(
-          detail?['document_number']?.toString() ?? 'Stock Opname',
-          style: const TextStyle(fontWeight: FontWeight.bold),
-        ),
-        actions: [
-          IconButton(
-            icon: Icon(
-              _isPortrait
-                  ? Icons.stay_current_landscape_outlined
-                  : Icons.stay_current_portrait_outlined,
-            ),
-            tooltip: _isPortrait ? 'Mode Landscape' : 'Mode Potret',
-            onPressed: _toggleOrientation,
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        _handleBack();
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF5F5F7),
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          foregroundColor: AppColors.textDark,
+          elevation: 0,
+          centerTitle: true,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: _handleBack,
+            tooltip: 'Kembali ke Menu Utama',
           ),
-        ],
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Container(height: 1, color: Colors.grey.shade200),
-        ),
-      ),
-      body: isLoading
-          ? const Center(
-              child: CircularProgressIndicator(color: AppColors.primary),
-            )
-          : Column(
-              children: [
-                _buildHeader(),
-                Expanded(child: _buildItemList()),
-                if (!_isReadOnly()) _buildBottomBar(),
-              ],
+          title: Text(
+            detail?['document_number']?.toString() ?? 'Stock Opname',
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+          actions: [
+            IconButton(
+              icon: Icon(
+                _isPortrait
+                    ? Icons.stay_current_landscape_outlined
+                    : Icons.stay_current_portrait_outlined,
+              ),
+              tooltip: _isPortrait ? 'Mode Landscape' : 'Mode Potret',
+              onPressed: _toggleOrientation,
             ),
+          ],
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(1),
+            child: Container(height: 1, color: Colors.grey.shade200),
+          ),
+        ),
+        body: isLoading
+            ? const Center(
+                child: CircularProgressIndicator(color: AppColors.primary),
+              )
+            : Column(
+                children: [
+                  _buildHeader(),
+                  Expanded(child: _buildItemList()),
+                  if (!_isReadOnly()) _buildBottomBar(),
+                ],
+              ),
+      ),
     );
   }
 

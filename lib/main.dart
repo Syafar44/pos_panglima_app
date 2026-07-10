@@ -5,12 +5,14 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:pos_panglima_app/data/notifiers.dart';
 import 'package:pos_panglima_app/services/bluetooth_printer_service.dart';
 import 'package:pos_panglima_app/services/camera_service.dart';
+import 'package:pos_panglima_app/services/fcm_token_service.dart';
 import 'package:pos_panglima_app/services/helper/splash_screen.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:pos_panglima_app/firebase_options.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:pos_panglima_app/services/offline_sync_manager.dart';
 import 'package:pos_panglima_app/utils/log_buffer.dart';
 import 'package:pos_panglima_app/utils/notif_utils.dart';
 
@@ -86,6 +88,17 @@ void main() async {
     };
   });
 
+  // FCM token bisa rotate sewaktu-waktu (reinstall, clear data, dsb).
+  // Kalau tidak disinkronkan, notifikasi push akan diam-diam berhenti jalan.
+  FirebaseMessaging.instance.onTokenRefresh.listen((_) {
+    FcmTokenService.syncToken();
+  });
+
+  // Retry sync di startup — no-op kalau user belum login atau token sama
+  // dengan yang sudah sukses dikirim sebelumnya.
+  // ignore: unawaited_futures
+  FcmTokenService.syncToken();
+
   final prefs = await SharedPreferences.getInstance();
 
   final isVisible = prefs.getBool('notif_visible') ?? false;
@@ -104,6 +117,8 @@ void main() async {
   // await Hive.openBox('menuBox');
 
   await dotenv.load(fileName: ".env");
+
+  OfflineSyncManager.start();
 
   PaintingBinding.instance.imageCache.maximumSize = 100;
   PaintingBinding.instance.imageCache.maximumSizeBytes = 50 << 20; // 50MB
