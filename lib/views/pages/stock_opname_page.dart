@@ -183,7 +183,7 @@ class _StockOpnamePageState extends State<StockOpnamePage> {
   void _navigateBack() {
     isBackSO.value = false;
     selectedPageInventoryNotifier.value = 2;
-    selectedPageNotifier.value = 3;
+    selectedPageNotifier.value = 4;
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(builder: (_) => const WidgetTree()),
@@ -515,7 +515,7 @@ class _StockOpnamePageState extends State<StockOpnamePage> {
       );
       isBackSO.value = false;
       selectedPageInventoryNotifier.value = 2;
-      selectedPageNotifier.value = 3;
+      selectedPageNotifier.value = 4;
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(builder: (_) => const WidgetTree()),

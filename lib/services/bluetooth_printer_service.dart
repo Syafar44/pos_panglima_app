@@ -520,6 +520,236 @@ class BluetoothPrinterService {
     );
   }
 
+  /// Cetak struk Big Order. Format mirip struk pembayaran: logo, header outlet,
+  /// info pesanan, daftar item, lalu Total / DP / Sisa.
+  ///
+  /// [data] = gabungan detail Big Order (lines, total_amount, total_dibayar,
+  /// sisa_tagihan, pickup_at, document_number) + nama pelanggan dari daftar.
+  /// Return false bila printer tidak terhubung (biar pemanggil bisa memberi tahu).
+  static Future<bool> printBigOrder({
+    required Map<String, dynamic> data,
+    String usersName = '',
+  }) async {
+    final bool? isConn = await bluetooth.isConnected;
+    if (isConn != true) {
+      debugPrint("Printer belum terhubung! Melewati cetak Big Order.");
+      return false;
+    }
+
+    await initializeDateFormatting('id_ID', null);
+
+    final String docNumber = (data['document_number'] ?? '-').toString();
+    final String pelanggan = (data['customers_name'] ?? 'General Pelanggan')
+        .toString();
+    final int total = (data['total_amount'] as num?)?.toInt() ?? 0;
+    final int dibayar = (data['total_dibayar'] as num?)?.toInt() ?? 0;
+    final int sisa =
+        (data['sisa_tagihan'] as num?)?.toInt() ?? (total - dibayar);
+
+    // Daftar item bisa datang dengan nama key berbeda tergantung backend.
+    List lines = const [];
+    for (final key in const [
+      'lines',
+      'items',
+      'pos_order_lines',
+      'order_lines',
+      'big_order_lines',
+      'big_order_details',
+      'details',
+    ]) {
+      final v = data[key];
+      if (v is List && v.isNotEmpty) {
+        lines = v;
+        break;
+      }
+    }
+
+    // Waktu pengambilan.
+    String waktuAmbil = '-';
+    final pickupStr = data['pickup_at']?.toString();
+    if (pickupStr != null && pickupStr.isNotEmpty) {
+      final parsed = DateTime.tryParse(pickupStr);
+      if (parsed != null) {
+        waktuAmbil = DateFormat("d MMM yyyy, HH.mm", "id_ID").format(parsed);
+      }
+    }
+
+    final String printedAt = DateFormat(
+      "d MMM yyyy, HH.mm",
+      "id_ID",
+    ).format(DateTime.now());
+
+    final String user = usersName.replaceFirst(RegExp(r'^Kasir\s+'), '');
+    final prefs = await SharedPreferences.getInstance();
+    final address = prefs.getString('outlet_address') ?? '';
+
+    await printLogo(usersName: user.isEmpty ? 'panglima' : user);
+    bluetooth.printCustom(user.isEmpty ? 'BIG ORDER' : user, 5, 1);
+    bluetooth.printNewLine();
+    if (address.isNotEmpty) {
+      bluetooth.printCustom(address, 0, 1);
+    }
+
+    bluetooth.printCustom('--------------------------------', 1, 0);
+    bluetooth.printCustom('BIG ORDER', 1, 1);
+    bluetooth.printCustom('--------------------------------', 1, 0);
+    bluetooth.printCustom('ID Pesanan  : $docNumber', 0, 0);
+    bluetooth.printCustom('Pelanggan   : $pelanggan', 0, 0);
+    bluetooth.printCustom('Waktu Ambil : $waktuAmbil', 0, 0);
+    bluetooth.printCustom('--------------------------------', 1, 0);
+
+    if (lines.isEmpty) {
+      bluetooth.printCustom('(rincian item tidak tersedia)', 0, 1);
+    } else {
+      for (final e in lines) {
+        if (e is! Map) continue;
+        final String nama =
+            (e['pos_menus_name'] ??
+                    e['item_name'] ??
+                    e['name'] ??
+                    e['title'] ??
+                    '-')
+                .toString();
+        final int qty =
+            (e['quantity'] as num?)?.toInt() ??
+            (e['qty'] as num?)?.toInt() ??
+            0;
+        final int price = (e['price'] as num?)?.toInt() ?? 0;
+        final int lineTotal =
+            (e['total'] as num?)?.toInt() ??
+            (e['subtotal'] as num?)?.toInt() ??
+            price * qty;
+
+        bluetooth.printCustom(nama, 1, 0);
+
+        // Varian / tambahan (props).
+        final dynamic props = e['props'] ?? e['pos_order_lines_props'];
+        if (props is List) {
+          for (final prop in props) {
+            if (prop is! Map) continue;
+            final pName =
+                (prop['pos_menus_name'] ?? prop['title'] ?? prop['name'] ?? '-')
+                    .toString();
+            final pQty = (prop['quantity'] as num?)?.toInt() ?? 0;
+            bluetooth.printCustom('   ${pQty}x $pName', 0, 0);
+          }
+        }
+
+        bluetooth.printLeftRight(
+          ' $qty x ${convertIDR(price)}',
+          convertIDR(lineTotal),
+          0,
+        );
+        bluetooth.printNewLine();
+      }
+    }
+
+    final bool lunas = sisa <= 0;
+    bluetooth.printCustom('--------------------------------', 1, 0);
+    bluetooth.printLeftRight('Total   :', convertIDR(total), 0);
+    bluetooth.printLeftRight('Dibayar :', convertIDR(dibayar), 0);
+    if (!lunas) {
+      bluetooth.printLeftRight('Sisa    :', convertIDR(sisa), 0);
+    }
+    bluetooth.printCustom('--------------------------------', 1, 0);
+    // Penanda LUNAS hanya saat sudah lunas.
+    if (lunas) {
+      bluetooth.printCustom('*** LUNAS ***', 2, 1);
+      bluetooth.printCustom('--------------------------------', 1, 0);
+    }
+    // Catatan bawa struk — selalu tampil.
+    bluetooth.printCustom('HARAP MEMBAWA STRUK INI', 1, 1);
+    bluetooth.printCustom('SAAT PENGAMBILAN PESANAN', 1, 1);
+    bluetooth.printCustom('--------------------------------', 1, 0);
+    bluetooth.printCustom('Dicetak: $printedAt', 0, 1);
+    bluetooth.printNewLine();
+    bluetooth.paperCut();
+    return true;
+  }
+
+  /// Cetak DAFTAR transaksi (untuk laporan per-kategori di laporan_page).
+  /// Memakai pengaturan/format yang sama dengan struk: cek koneksi, logo,
+  /// alamat outlet, garis pemisah, `printLeftRight`, dan `paperCut`.
+  static Future<void> printTransactionReport({
+    required String title,
+    required String subtitle,
+    required List transactions,
+  }) async {
+    bool? isConn = await bluetooth.isConnected;
+    if (isConn != true) {
+      debugPrint("Printer belum terhubung! Melewati cetak laporan transaksi.");
+      return;
+    }
+
+    await initializeDateFormatting('id_ID', null);
+    final String printedAt = DateFormat(
+      "d MMM yyyy, HH.mm",
+      "id_ID",
+    ).format(DateTime.now());
+
+    // Identitas outlet untuk pemilihan logo & header — ambil dari transaksi
+    // pertama (field users_name).
+    final String usersName = transactions.isNotEmpty
+        ? (transactions.first['users_name']?.toString() ?? '')
+        : '';
+    final String user = usersName.replaceFirst(RegExp(r'^Kasir\s+'), '');
+
+    final prefs = await SharedPreferences.getInstance();
+    final address = prefs.getString('outlet_address') ?? '';
+
+    await printLogo(usersName: user.isEmpty ? 'panglima' : user);
+    bluetooth.printCustom(user.isEmpty ? 'LAPORAN' : user, 5, 1);
+    bluetooth.printNewLine();
+    if (address.isNotEmpty) {
+      bluetooth.printCustom(address, 0, 1);
+    }
+
+    bluetooth.printCustom('--------------------------------', 1, 0);
+    bluetooth.printCustom('LAPORAN TRANSAKSI', 1, 1);
+    bluetooth.printCustom(title, 0, 1);
+    if (subtitle.isNotEmpty) {
+      bluetooth.printCustom(subtitle, 0, 1);
+    }
+    bluetooth.printCustom('Dicetak: $printedAt', 0, 1);
+    bluetooth.printCustom('--------------------------------', 1, 0);
+
+    num total = 0;
+    for (final t in transactions) {
+      final String doc = t['document_number']?.toString() ?? '-';
+      final amount = t['total_amount'] ?? 0;
+      if (amount is num) total += amount;
+
+      String tanggal = '';
+      String waktu = '';
+      final ca = t['created_at']?.toString();
+      if (ca != null && ca.isNotEmpty) {
+        final parsed = DateTime.tryParse(ca);
+        if (parsed != null) {
+          tanggal = DateFormat("d MMM yyyy", "id_ID").format(parsed);
+          waktu = DateFormat("HH.mm", "id_ID").format(parsed);
+        }
+      }
+
+      // Baris 1: ID pesanan (kiri) | tanggal (kanan)
+      bluetooth.printLeftRight(doc, tanggal, 0);
+      // Baris 2: nominal (kiri) | waktu (kanan)
+      bluetooth.printLeftRight(
+        convertIDR(amount is num ? amount : 0),
+        waktu,
+        0,
+      );
+      bluetooth.printCustom('--------------------------------', 1, 0);
+    }
+
+    bluetooth.printCustom('Jumlah Transaksi : ${transactions.length}', 0, 0);
+    bluetooth.printNewLine();
+    bluetooth.printCustom('Total :', 2, 0);
+    bluetooth.printCustom(convertIDR(total), 2, 0);
+    bluetooth.printCustom('--------------------------------', 1, 0);
+    bluetooth.printNewLine();
+    bluetooth.paperCut();
+  }
+
   static Future<void> _executePrint({
     required String documentNumber,
     required String usersName,

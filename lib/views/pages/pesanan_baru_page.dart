@@ -16,6 +16,7 @@ import 'package:pos_panglima_app/services/storage/shift_storage_service.dart';
 import 'package:pos_panglima_app/utils/convert.dart';
 import 'package:pos_panglima_app/utils/crash_reporter.dart';
 import 'package:pos_panglima_app/utils/modal_insufficient_stock.dart';
+import 'package:pos_panglima_app/utils/offline_guard.dart';
 import 'package:pos_panglima_app/utils/skeleton_loader.dart';
 import 'package:pos_panglima_app/utils/snackbar_util.dart';
 import 'package:pos_panglima_app/utils/stock_parser.dart';
@@ -125,6 +126,8 @@ class _PesananBaruPageState extends State<PesananBaruPage>
     setState(() => _busyCartIds.add(id));
     try {
       if (!await NetworkService.isOnline()) {
+        if (!mounted) return;
+        if (OfflineGuard.blocked(context)) return; // transaksi offline dimatikan
         // Validasi stok terhadap cart prospektif (baris ini +1).
         final cart = await OfflineStockService.getCartSnapshot();
         final prospective = cart
@@ -148,8 +151,14 @@ class _PesananBaruPageState extends State<PesananBaruPage>
         await loadCart();
         return;
       }
-      await cartService.plusCart(id);
-      await loadCart();
+      final res = await cartService.plusCart(id);
+      // Pakai cart dari respons kalau ada (hemat getCart); kalau tidak, refresh
+      // seperti biasa.
+      if (_applyCartFromResponse(res)) {
+        loadCart(); // reconcile latar belakang
+      } else {
+        await loadCart();
+      }
     } on DioException catch (e, stack) {
       CrashReporter.report(
         e,
@@ -384,6 +393,29 @@ class _PesananBaruPageState extends State<PesananBaruPage>
     }
   }
 
+  /// Kalau server mengembalikan keranjang terbaru di response `data` (List),
+  /// pakai langsung supaya tidak perlu `getCart` lagi → hemat 1 round-trip,
+  /// scan terasa lebih cepat. Return true kalau berhasil dipakai.
+  bool _applyCartFromResponse(Response res) {
+    final data = (res.data is Map) ? res.data['data'] : null;
+    if (data is! List) return false;
+
+    final newItems =
+        data.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    final total = newItems.fold<int>(
+      0,
+      (sum, item) => sum + ((item['total'] as int?) ?? 0),
+    );
+    if (!mounted) return true;
+    setState(() {
+      cartItems = newItems;
+      totalPayment = total;
+    });
+    // Sinkronkan snapshot supaya siap kalau tiba-tiba offline.
+    OfflineStockService.saveCartSnapshot(newItems);
+    return true;
+  }
+
   Future<void> _loadShiftStatus() async {
     final result = await ShiftStorageService.hasActiveShift();
     setState(() {
@@ -446,13 +478,18 @@ class _PesananBaruPageState extends State<PesananBaruPage>
 
     // ── MODE OFFLINE ──────────────────────────────────────────────────────
     if (!await NetworkService.isOnline()) {
+      if (!mounted) return;
+      if (OfflineGuard.blocked(context)) return; // transaksi offline dimatikan
       await _savedToCartOffline(id, price);
       onSaved();
       return;
     }
 
     try {
-      await cartService.postCart(payload);
+      final res = await cartService.postCart(payload);
+      // Pakai cart dari respons kalau ada (hemat 1 round-trip). loadCart di
+      // finally tetap jalan sebagai reconcile latar belakang.
+      _applyCartFromResponse(res);
     } on DioException catch (e, stack) {
       CrashReporter.report(
         e,
@@ -706,7 +743,7 @@ class _PesananBaruPageState extends State<PesananBaruPage>
   @override
   Widget build(BuildContext context) {
     return BarcodeKeyboardListener(
-      bufferDuration: const Duration(milliseconds: 200),
+      bufferDuration: const Duration(milliseconds: 100),
       onBarcodeScanned: _handleBarcodeScan,
       child: Stack(
         children: [
@@ -1182,7 +1219,7 @@ class _PesananBaruPageState extends State<PesananBaruPage>
                             color: Colors.transparent,
                             child: InkWell(
                               onTap: () {
-                                selectedPageNotifier.value = 3;
+                                selectedPageNotifier.value = 4;
                                 // Inventory reminder tidak boleh dihapus manual —
                                 // hanya hilang setelah semua surat jalan dikonfirmasi
                                 if (incomingNotifNotifier.value?['type'] !=

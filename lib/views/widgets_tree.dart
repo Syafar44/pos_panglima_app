@@ -4,6 +4,7 @@ import 'package:pos_panglima_app/data/notifiers.dart';
 import 'package:pos_panglima_app/services/update_service.dart';
 import 'package:pos_panglima_app/utils/app_colors.dart';
 import 'package:pos_panglima_app/utils/snackbar_util.dart';
+import 'package:pos_panglima_app/views/pages/big_order_page.dart';
 import 'package:pos_panglima_app/views/pages/inventory_page.dart';
 // import 'package:pos_panglima_app/views/pages/karyawan_page.dart';
 import 'package:pos_panglima_app/views/pages/laporan_page.dart';
@@ -17,6 +18,7 @@ import 'package:pos_panglima_app/views/widgets/network_indicator.dart';
 
 List<Map<String, dynamic>> pages = [
   {'name': 'Pesanan Baru', 'builder': () => const PesananBaruPage()},
+  {'name': 'Big Order', 'builder': () => const BigOrderPage()},
   // {'name': 'Open Bill', 'builder': () => const OpenBillPage()},
   {'name': 'Riwayat Penjualan', 'builder': () => const RiwayatPenjualanPage()},
   // {'name': 'Pelanggan', 'builder': () => const PelangganPage()},

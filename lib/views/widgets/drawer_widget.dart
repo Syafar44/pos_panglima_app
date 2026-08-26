@@ -13,6 +13,7 @@ import 'package:pos_panglima_app/views/widgets_tree.dart';
 
 List<Map<String, dynamic>> list = [
   {'label': 'Pesanan Baru', 'icon': const Icon(Icons.shopping_cart)},
+  {'label': 'Big Order', 'icon': const Icon(Icons.local_mall_outlined)},
   // {'label': 'Open Bill', 'icon': Icon(Icons.receipt_sharp)},
   {'label': 'Riwayat Penjualan', 'icon': const Icon(Icons.history)},
   // {'label': 'Pelanggan', 'icon': Icon(Icons.person)},

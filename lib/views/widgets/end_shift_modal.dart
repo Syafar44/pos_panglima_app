@@ -39,6 +39,7 @@ class _EndShiftModalState extends State<EndShiftModal> {
   late bool isLoading = true;
   Map<String, dynamic> reportData = {};
   int totalPenerimaan = 0;
+  int totalCompliment = 0;
 
   @override
   void initState() {
@@ -132,8 +133,15 @@ class _EndShiftModalState extends State<EndShiftModal> {
     final cashActive = cash ?? 0;
     final total = totalPenerimaanNew + cashActive;
 
+    // Total compliment hanya informasi (item gratis), tidak dijumlahkan ke total.
+    final compliment = reportData['compliment'];
+    final complimentAmount = (compliment is Map)
+        ? ((compliment['total_amount'] ?? 0) as num).toInt()
+        : 0;
+
     setState(() {
       totalPenerimaan = total.toInt();
+      totalCompliment = complimentAmount;
     });
 
     final formatter = NumberFormat.currency(
@@ -525,6 +533,18 @@ class _EndShiftModalState extends State<EndShiftModal> {
                           const Divider(height: 24),
                           _buildInfoRow('Waktu', formatDateTime(date)),
                           const Divider(height: 24),
+                          if (totalCompliment > 0) ...[
+                            _buildInfoRow(
+                              'Total Compliment',
+                              NumberFormat.currency(
+                                locale: 'id_ID',
+                                symbol: 'Rp ',
+                                decimalDigits: 0,
+                              ).format(totalCompliment),
+                              valueColor: Colors.purple.shade600,
+                            ),
+                            const Divider(height: 24),
+                          ],
                           _buildInfoRow(
                             'Total Pendapatan System',
                             NumberFormat.currency(

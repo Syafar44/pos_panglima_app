@@ -169,19 +169,25 @@ class _RiwayatPenjualanPageState extends State<RiwayatPenjualanPage> {
 
   Future<void> handlePrintStruk() async {
     try {
+      // Backend kadang mengirim nilai uang/jumlah sebagai double — mis. order
+      // dengan props ber-kuantitas desimal (0.04) membuat jumlah_item/total
+      // jadi double. printStruk mewajibkan int → coerce via num.toInt() agar
+      // tidak crash "type 'double' is not a subtype of type 'int'".
+      int asInt(dynamic v) => (v as num?)?.toInt() ?? 0;
+
       await BluetoothPrinterService.printStruk(
-        documentNumber: orderDetail?['document_number'],
-        usersName: orderDetail?['users_name'],
-        listProduk: orderDetail?['pos_order_lines'],
-        totalQuantity: orderDetail?['jumlah_item'],
+        documentNumber: (orderDetail?['document_number'] ?? '-').toString(),
+        usersName: (orderDetail?['users_name'] ?? '').toString(),
+        listProduk: orderDetail?['pos_order_lines'] ?? [],
+        totalQuantity: asInt(orderDetail?['jumlah_item']),
         isCash: orderDetail?['is_cash'] == 1 ? true : false,
         method: orderDetail?['pos_order_method_id'] == 1
             ? 'Takeaway'
             : 'Delivery',
         paymentMethod: orderDetail?['pos_payment_method_name'],
-        totalPayment: orderDetail?['total_amount'],
-        subTotal: orderDetail?['subtotal_amount'],
-        payment: orderDetail?['pay_amount'],
+        totalPayment: asInt(orderDetail?['total_amount']),
+        subTotal: asInt(orderDetail?['subtotal_amount']),
+        payment: asInt(orderDetail?['pay_amount']),
         dateTime: orderDetail?['created_at'],
         isPayment: false,
         isCopy: true,

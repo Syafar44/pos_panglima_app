@@ -29,6 +29,7 @@ import 'package:pos_panglima_app/utils/bom_calculator.dart';
 import 'package:pos_panglima_app/utils/convert.dart';
 import 'package:pos_panglima_app/utils/loader_utils.dart';
 import 'package:pos_panglima_app/utils/modal_insufficient_stock.dart';
+import 'package:pos_panglima_app/utils/offline_guard.dart';
 import 'package:pos_panglima_app/utils/rupiah_formatter.dart';
 import 'package:pos_panglima_app/utils/snackbar_util.dart';
 import 'package:pos_panglima_app/views/components/ui/custom_checkbox.dart';
@@ -83,6 +84,16 @@ class _PaymentPageState extends State<PaymentPage> {
   final TextEditingController _customAmountController = TextEditingController();
   final TextEditingController _voucherController = TextEditingController();
   final TextEditingController _keteranganCompliment = TextEditingController();
+  // Ongkos kirim — hanya dipakai & wajib saat metode order = Delivery.
+  final TextEditingController _ongkirController = TextEditingController();
+  int _ongkir = 0;
+
+  /// Sementara disembunyikan sampai API ongkir dari backend siap.
+  /// Set ke `true` untuk mengaktifkan kembali input & validasi ongkir.
+  final bool _ongkirEnabled = false;
+
+  /// True bila metode order yang dipilih adalah Delivery.
+  bool get _isDelivery => selectedMethodName.toLowerCase().contains('delivery');
   // final FocusNode _voucherFocusNode = FocusNode();
 
   int roundToCashDenomination(int num) {
@@ -486,6 +497,17 @@ class _PaymentPageState extends State<PaymentPage> {
       return;
     }
 
+    // Delivery → ongkos kirim wajib diisi (> 0).
+    if (_ongkirEnabled && _isDelivery && _ongkir <= 0) {
+      SnackbarUtil.show(
+        context,
+        title: "Ongkir Wajib",
+        message: "Isi ongkos kirim terlebih dahulu untuk metode Delivery.",
+        status: SnackBarStatus.warning,
+      );
+      return;
+    }
+
     final confirmed = await _showPaymentConfirmationModal();
     if (!confirmed || !mounted) return;
 
@@ -608,6 +630,15 @@ class _PaymentPageState extends State<PaymentPage> {
                       selectedMethodName.isNotEmpty ? selectedMethodName : '-',
                       metodeColor,
                     ),
+                    if (_isDelivery && _ongkirEnabled) ...[
+                      const SizedBox(height: 10),
+                      _buildConfirmationRow(
+                        Icons.local_shipping_outlined,
+                        'Ongkos Kirim',
+                        convertIDR(_ongkir),
+                        Colors.blue.shade700,
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -734,6 +765,12 @@ class _PaymentPageState extends State<PaymentPage> {
 
     if (!online) {
       // ── BLOK OFFLINE ────────────────────────────────────────────────────
+      // Fitur transaksi offline dimatikan → tolak pembayaran offline.
+      if (!mounted) return;
+      if (OfflineGuard.blocked(context)) {
+        setState(() => isLoading = false);
+        return;
+      }
       // Hanya Compliment & Voucher yang wajib online (butuh verifikasi server).
       // Pembayaran tunai & non-tunai diperbolehkan offline.
       if (selectedMethodName == 'Compliment') {
@@ -1141,7 +1178,7 @@ class _PaymentPageState extends State<PaymentPage> {
         message: message,
         status: SnackBarStatus.error,
       );
-      paymentErrorModal();                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              
+      paymentErrorModal();
     } catch (e, stack) {
       // Tangkap exception lain (printer disconnect, camera error, format error, dll).
       // Order mungkin sudah tersimpan jika error terjadi setelah postOrder.
@@ -1195,8 +1232,11 @@ class _PaymentPageState extends State<PaymentPage> {
 
       await PendingLampiranService.save(clientRef, dest);
     } catch (e, stack) {
-      CrashReporter.report(e, stack,
-          reason: 'payment_page._captureLampiranOffline');
+      CrashReporter.report(
+        e,
+        stack,
+        reason: 'payment_page._captureLampiranOffline',
+      );
     } finally {
       await cameraService.dispose();
     }
@@ -2086,6 +2126,7 @@ class _PaymentPageState extends State<PaymentPage> {
     _customAmountController.dispose();
     _voucherController.dispose();
     _keteranganCompliment.dispose();
+    _ongkirController.dispose();
     _scrollController.dispose();
     super.dispose();
   }
@@ -2825,25 +2866,99 @@ class _PaymentPageState extends State<PaymentPage> {
   }
 
   Widget methodPaymnet() {
-    return Row(
-      spacing: 12,
-      children: orderMethods.map((method) {
-        String name = method['name'] ?? '';
-        int id = method['id'] ?? 0;
-        if (selectedTab == 1 && id == 4) {
-          return const SizedBox.shrink();
-        }
-        return CustomChipCheckbox(
-          label: name,
-          isSelected: selectedMethodName == name,
-          onSelect: () {
-            setState(() {
-              selectedMethodName = name;
-              selectedMethodId = id.toString();
-            });
-          },
-        );
-      }).toList(),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          spacing: 12,
+          children: orderMethods.map((method) {
+            String name = method['name'] ?? '';
+            int id = method['id'] ?? 0;
+            if (selectedTab == 1 && id == 4) {
+              return const SizedBox.shrink();
+            }
+            return CustomChipCheckbox(
+              label: name,
+              isSelected: selectedMethodName == name,
+              onSelect: () {
+                setState(() {
+                  selectedMethodName = name;
+                  selectedMethodId = id.toString();
+                });
+              },
+            );
+          }).toList(),
+        ),
+        if (_isDelivery && _ongkirEnabled) _ongkirField(),
+      ],
+    );
+  }
+
+  /// Input ongkos kirim — tampil & wajib hanya saat metode order = Delivery.
+  Widget _ongkirField() {
+    return Padding(
+      padding: const EdgeInsets.only(top: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.local_shipping_rounded,
+                size: 18,
+                color: Colors.blue.shade700,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Ongkos Kirim',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.blue.shade900,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                '* wajib',
+                style: TextStyle(fontSize: 12, color: Colors.red.shade600),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _ongkirController,
+            keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            onChanged: (v) =>
+                setState(() => _ongkir = int.tryParse(v.trim()) ?? 0),
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+            decoration: InputDecoration(
+              prefixText: 'Rp ',
+              prefixStyle: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Colors.black87,
+              ),
+              hintText: '0',
+              isDense: true,
+              filled: true,
+              fillColor: Colors.blue.shade50,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide(color: Colors.blue.shade200),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide(color: Colors.blue.shade200),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide(color: Colors.blue.shade700, width: 1.5),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 

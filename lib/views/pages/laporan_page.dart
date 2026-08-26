@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:pos_panglima_app/services/bluetooth_printer_service.dart';
 import 'package:pos_panglima_app/utils/app_colors.dart';
 import 'package:pos_panglima_app/services/auth_service.dart';
 import 'package:pos_panglima_app/services/helper/dio_client.dart';
@@ -223,20 +224,6 @@ class _LaporanPageState extends State<LaporanPage> {
             ],
           ),
         ),
-        const SizedBox(height: 16),
-        // Padding(
-        //   padding: const EdgeInsets.all(20.0),
-        //   child: Row(
-        //     children: [
-        //       _buildSummaryCard(
-        //         title: 'Penerimaan Shift Sebelumnya',
-        //         value: convertIDR(2934589),
-        //         icon: Icons.account_balance_wallet_rounded,
-        //         color: AppColors.accentDark,
-        //       ),
-        //     ],
-        //   ),
-        // ),
         const SizedBox(height: 16),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20.0),
@@ -557,41 +544,95 @@ class _LaporanPageState extends State<LaporanPage> {
     required dynamic id,
     required String subtitle,
   }) {
+    // Buat future SEKALI (di luar builder) supaya tidak fetch ulang tiap
+    // StatefulBuilder rebuild, dan tombol Cetak bisa memakai hasil yang sama.
+    final int parsedId = (id is int) ? id : (id as num).toInt();
+    final Future<Response> detailFuture;
+    switch (type) {
+      case 1:
+        detailFuture = reportService.getDetailPenerimaan(shiftId!, parsedId);
+        break;
+      case 2:
+        detailFuture = reportService.getDetailPenjualan(shiftId!, parsedId);
+        break;
+      case 3:
+        detailFuture = reportService.getDetailPelanggan(shiftId!, parsedId);
+        break;
+      case 4:
+        detailFuture = reportService.getDetailBarang(shiftId!, parsedId);
+        break;
+      default:
+        detailFuture = Future<Response>.error(Exception("Tipe tidak valid"));
+    }
+
     return showDialog(
       context: context,
       builder: (context) {
-        Future<Response> fetchDetail() {
-          final int parsedId = (id is int) ? id : (id as num).toInt();
-          switch (type) {
-            case 1:
-              return reportService.getDetailPenerimaan(shiftId!, parsedId);
-            case 2:
-              return reportService.getDetailPenjualan(shiftId!, parsedId);
-            case 3:
-              return reportService.getDetailPelanggan(shiftId!, parsedId);
-            case 4:
-              return reportService.getDetailBarang(shiftId!, parsedId);
-            default:
-              throw Exception("Tipe tidak valid");
-          }
-        }
+        bool printing = false;
 
-        return Dialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          backgroundColor: Colors.white,
-          clipBehavior: Clip.antiAlias,
-          child: SizedBox(
-            width: 600.0,
-            height: MediaQuery.of(context).size.height * 0.7,
-            child: Column(
-              children: [
-                _buildModalHeader(title, subtitle),
-                Expanded(
-                  child: FutureBuilder(
-                    future: fetchDetail(),
-                    builder: (context, snapshot) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            Future<void> handlePrint() async {
+              if (printing) return;
+              setModalState(() => printing = true);
+              try {
+                final res = await detailFuture;
+                final List data = (res.data['data'] as List?) ?? [];
+                if (data.isEmpty) {
+                  if (!context.mounted) return;
+                  SnackbarUtil.show(
+                    context,
+                    title: "Tidak ada transaksi",
+                    message: "Tidak ada data untuk dicetak.",
+                    status: SnackBarStatus.warning,
+                  );
+                  return;
+                }
+                await BluetoothPrinterService.printTransactionReport(
+                  title: title,
+                  subtitle: subtitle,
+                  transactions: data,
+                );
+              } catch (e, stack) {
+                CrashReporter.report(
+                  e,
+                  stack,
+                  reason: 'laporan_page.printTransactionList',
+                );
+                if (!context.mounted) return;
+                SnackbarUtil.show(
+                  context,
+                  title: "Gagal mencetak",
+                  message:
+                      "Terjadi kendala saat mencetak. Pastikan printer terhubung dan coba lagi.",
+                  status: SnackBarStatus.error,
+                );
+              } finally {
+                setModalState(() => printing = false);
+              }
+            }
+
+            return Dialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              backgroundColor: Colors.white,
+              clipBehavior: Clip.antiAlias,
+              child: SizedBox(
+                width: 600.0,
+                height: MediaQuery.of(context).size.height * 0.7,
+                child: Column(
+                  children: [
+                    _buildModalHeader(
+                      title,
+                      subtitle,
+                      printing: printing,
+                      onPrint: handlePrint,
+                    ),
+                    Expanded(
+                      child: FutureBuilder(
+                        future: detailFuture,
+                        builder: (context, snapshot) {
                       if (snapshot.connectionState == ConnectionState.waiting) {
                         return const Center(
                           child: CircularProgressIndicator(
@@ -692,44 +733,83 @@ class _LaporanPageState extends State<LaporanPage> {
             ),
           ),
         );
+          },
+        );
       },
     );
   }
 
-  Widget _buildModalHeader(String title, dynamic subtitle) {
+  Widget _buildModalHeader(
+    String title,
+    dynamic subtitle, {
+    required bool printing,
+    required VoidCallback onPrint,
+  }) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
         border: Border(bottom: BorderSide(color: Colors.grey.shade300)),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 20.0,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                subtitle,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 18.0,
-                  color: Colors.orange,
-                ),
-              ),
-            ],
-          ),
+          // Tombol Close (kiri, di sebelah judul)
           IconButton(
-            icon: const Icon(Icons.close, size: 28.0),
+            icon: const Icon(Icons.close, size: 26.0),
+            tooltip: 'Tutup',
             onPressed: () => Navigator.pop(context),
+          ),
+          const SizedBox(width: 4),
+          // Judul + subtitle
+          Expanded(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18.0,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '$subtitle',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15.0,
+                    color: Colors.orange,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          // Tombol Print (kanan)
+          ElevatedButton.icon(
+            onPressed: printing ? null : onPrint,
+            icon: printing
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Icon(Icons.print_outlined, size: 18),
+            label: Text(printing ? 'Mencetak...' : 'Cetak'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
           ),
         ],
       ),

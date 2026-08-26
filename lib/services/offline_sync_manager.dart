@@ -27,7 +27,14 @@ class OfflineSyncManager {
 
   /// Satu siklus sync: tarik snapshot + menu → flush antrian pending.
   static Future<void> syncNow() async {
-    if (!await NetworkService.isOnline()) return;
+    // Heartbeat: tiap tick (start + setiap 5 menit) tercetak, jadi mudah cek
+    // apakah timer benar-benar berjalan. Timer hanya berdetak saat app di
+    // foreground — di-suspend OS saat app di-background, lanjut lagi saat resume.
+    debugPrint('[OfflineSync] tick @ ${DateTime.now().toIso8601String()}');
+    if (!await NetworkService.isOnline()) {
+      debugPrint('[OfflineSync] skip: offline');
+      return;
+    }
     try {
       final dio = ApiClient().dio;
 

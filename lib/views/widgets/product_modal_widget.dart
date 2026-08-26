@@ -10,6 +10,7 @@ import 'package:pos_panglima_app/services/storage/shift_storage_service.dart';
 import 'package:pos_panglima_app/utils/convert.dart';
 import 'package:pos_panglima_app/utils/crash_reporter.dart';
 import 'package:pos_panglima_app/utils/modal_insufficient_stock.dart';
+import 'package:pos_panglima_app/utils/offline_guard.dart';
 import 'package:pos_panglima_app/utils/quantity_timer_mixin.dart';
 import 'package:pos_panglima_app/utils/snackbar_util.dart';
 import 'package:pos_panglima_app/utils/stock_parser.dart';
@@ -143,30 +144,20 @@ class _ProductModalWidgetState extends State<ProductModalWidget>
       "pos_cart_props": mergedProps,
     };
 
-    // ── MODE OFFLINE ──────────────────────────────────────────────────────
-    // Saat offline, simpan ke cart lokal + validasi stok dari snapshot (BOM),
-    // bukan ke server.
+    // ── PEMILIHAN SUMBER PENGECEKAN STOK ──────────────────────────────────
+    // Online  → pengecekan stok sepenuhnya di server (postCart → insufficient_stock).
+    // Offline → pakai stok snapshot lokal (validateDetailed di _savedToCartOffline).
+    // Dipisah agar tidak terjadi tabrakan stok: snapshot lokal bisa basi dan
+    // berbeda dengan stok server yang real-time.
     final online = await NetworkService.isOnline();
     if (!online) {
-      await _savedToCartOffline(props);
-      return;
-    }
-
-    // ── GUARD STOK LOKAL (online) ─────────────────────────────────────────
-    // Cegah item stok 0 / minus masuk cart sebelum dikirim ke server.
-    // validateDetailed hanya mengecek material presisi (Pcs, dll.);
-    // "Gr" & skip_validation dilewati ("bandingkan yang sesuai saja").
-    // Server tetap jadi otoritas final saat postCart di bawah.
-    final currentCart = await OfflineStockService.getCartSnapshot();
-    final lacking =
-        await OfflineStockService.validateDetailed([...currentCart, payload]);
-    if (lacking.isNotEmpty) {
       if (!mounted) return;
-      setState(() => isSubmitting = false);
-      showDialog(
-        context: context,
-        builder: (_) => ModalInsufficientStock(items: lacking),
-      );
+      // Fitur transaksi offline dimatikan → tolak.
+      if (OfflineGuard.blocked(context)) {
+        setState(() => isSubmitting = false);
+        return;
+      }
+      await _savedToCartOffline(props);
       return;
     }
 

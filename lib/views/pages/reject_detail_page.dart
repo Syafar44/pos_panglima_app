@@ -40,6 +40,9 @@ class _RejectItemEntry {
   String? itemName;
   String uom = '-';
   bool isLoadingUom = false;
+
+  /// Pilihan kondisi barang: 'return' atau 'waste' (hanya salah satu).
+  String? returnWaste;
   bool isDeleting = false;
   bool isSaving = false;
   bool isUploadingLampiran = false;
@@ -150,6 +153,14 @@ class _RejectDetailPageState extends State<RejectDetailPage> {
       setState(() {
         for (final line in lines) {
           final m = line as Map;
+          // ── DEBUG: cek field kondisi (line_type) dari response ──
+          debugPrint('[REJECT-DETAIL] line keys: ${m.keys.toList()}');
+          debugPrint(
+            '[REJECT-DETAIL] line_type=${m['line_type']} '
+            'return_waste=${m['return_waste']} kondisi=${m['kondisi']} '
+            'jenis=${m['jenis']} type=${m['type']}',
+          );
+          // ── AKHIR DEBUG ─────────────────────────────────────────
           final entry = _createItem();
           entry.lineId = (m['id'] as num?)?.toInt();
           final lineFileUrl = m['file_url']?.toString() ?? '';
@@ -175,6 +186,19 @@ class _RejectDetailPageState extends State<RejectDetailPage> {
           if (uomName != null) entry.uom = uomName.toString();
           final qty = m['qty'] ?? m['quantity'];
           if (qty != null) entry.quantityController.text = qty.toString();
+          final rw =
+              (m['line_type'] ??
+                      m['return_waste'] ??
+                      m['kondisi'] ??
+                      m['jenis'] ??
+                      m['type'])
+                  ?.toString()
+                  .toLowerCase();
+          if (rw == 'return' || rw == 'retur') {
+            entry.returnWaste = 'return';
+          } else if (rw == 'waste' || rw == 'wase') {
+            entry.returnWaste = 'waste';
+          }
           final remarks = m['alasan'] ?? m['remarks'] ?? m['note'];
           if (remarks != null) {
             entry.remarksController.text = remarks.toString();
@@ -506,6 +530,15 @@ class _RejectDetailPageState extends State<RejectDetailPage> {
       );
       return;
     }
+    if (last.returnWaste == null) {
+      SnackbarUtil.show(
+        context,
+        title: 'Kondisi belum dipilih',
+        message: 'Pilih kondisi (Return/Waste) pada baris terakhir.',
+        status: SnackBarStatus.warning,
+      );
+      return;
+    }
 
     setState(() {
       _isAddingLine = true;
@@ -513,7 +546,12 @@ class _RejectDetailPageState extends State<RejectDetailPage> {
     });
 
     try {
-      final payload = {'item_id': last.itemId, 'qty': qty, 'alasan': alasan};
+      final payload = {
+        'item_id': last.itemId,
+        'qty': qty,
+        'alasan': alasan,
+        'line_type': last.returnWaste,
+      };
       final res = await rejectService.addLinesReject(widget.id, payload);
       final data = res.data['data'];
 
@@ -738,6 +776,17 @@ class _RejectDetailPageState extends State<RejectDetailPage> {
       return;
     }
 
+    // 4. Validasi kondisi (Return/Waste)
+    if (item.returnWaste == null) {
+      SnackbarUtil.show(
+        context,
+        title: 'Kondisi belum dipilih',
+        message: 'Pilih kondisi (Return/Waste) terlebih dahulu.',
+        status: SnackBarStatus.warning,
+      );
+      return;
+    }
+
     final hasExistingPhoto = item.imageFile != null || item.lampiranId != null;
     if (hasExistingPhoto) {
       final confirmed = await _confirmReplacePhoto(item);
@@ -752,6 +801,7 @@ class _RejectDetailPageState extends State<RejectDetailPage> {
           'item_id': item.itemId,
           'qty': qty,
           'alasan': alasan,
+          'line_type': item.returnWaste,
         });
         final data = res.data['data'];
         if (!mounted) return;
@@ -958,6 +1008,7 @@ class _RejectDetailPageState extends State<RejectDetailPage> {
         'item_id': e.itemId,
         'qty': int.tryParse(e.quantityController.text.trim()) ?? 0,
         'alasan': e.remarksController.text.trim(),
+        'line_type': e.returnWaste,
       };
       if (e.lineId != null && e.lineId! > 0) {
         map['id'] = e.lineId;
@@ -997,6 +1048,15 @@ class _RejectDetailPageState extends State<RejectDetailPage> {
           context,
           title: 'Alasan kosong',
           message: 'Isi alasan reject pada baris ke-${i + 1}.',
+          status: SnackBarStatus.warning,
+        );
+        return;
+      }
+      if (lines[i]['line_type'] == null) {
+        SnackbarUtil.show(
+          context,
+          title: 'Kondisi belum dipilih',
+          message: 'Pilih kondisi (Return/Waste) pada baris ke-${i + 1}.',
           status: SnackBarStatus.warning,
         );
         return;
@@ -1077,6 +1137,15 @@ class _RejectDetailPageState extends State<RejectDetailPage> {
           context,
           title: 'Quantity tidak valid',
           message: 'Item ke-${i + 1} harus memiliki quantity lebih dari 0.',
+          status: SnackBarStatus.warning,
+        );
+        return;
+      }
+      if (item.returnWaste == null) {
+        SnackbarUtil.show(
+          context,
+          title: 'Kondisi belum dipilih',
+          message: 'Item ke-${i + 1} belum memilih kondisi (Return/Waste).',
           status: SnackBarStatus.warning,
         );
         return;
@@ -1276,7 +1345,7 @@ class _RejectDetailPageState extends State<RejectDetailPage> {
 
   void _navigateToInventory() {
     selectedPageInventoryNotifier.value = 3;
-    selectedPageNotifier.value = 3;
+    selectedPageNotifier.value = 4;
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(builder: (_) => const WidgetTree()),
@@ -1357,7 +1426,7 @@ class _RejectDetailPageState extends State<RejectDetailPage> {
           icon: const Icon(Icons.arrow_back),
           onPressed: () {
             selectedPageInventoryNotifier.value = 3;
-            selectedPageNotifier.value = 3;
+            selectedPageNotifier.value = 4;
             Navigator.pushAndRemoveUntil(
               context,
               MaterialPageRoute(builder: (_) => const WidgetTree()),
@@ -1903,6 +1972,47 @@ class _RejectDetailPageState extends State<RejectDetailPage> {
                                               fontSize: 13,
                                               color: Colors.black54,
                                             ),
+                                          ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              flex: 3,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  _buildLabel('Kondisi'),
+                                  DropdownButtonFormField<String>(
+                                    initialValue: item.returnWaste,
+                                    isExpanded: true,
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      color: Colors.black87,
+                                    ),
+                                    decoration: _fieldDecoration(hint: 'Pilih'),
+                                    hint: Text(
+                                      'Pilih',
+                                      style: TextStyle(
+                                        color: Colors.grey[400],
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                    items: const [
+                                      DropdownMenuItem(
+                                        value: 'return',
+                                        child: Text('Return'),
+                                      ),
+                                      DropdownMenuItem(
+                                        value: 'waste',
+                                        child: Text('Waste'),
+                                      ),
+                                    ],
+                                    onChanged: _isLocked
+                                        ? null
+                                        : (val) => setState(
+                                            () => item.returnWaste = val,
                                           ),
                                   ),
                                 ],
