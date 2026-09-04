@@ -19,13 +19,30 @@ import 'package:pos_panglima_app/utils/snackbar_util.dart';
 
 /// Satu baris item pesanan Big Order.
 class _BigLine {
-  final Map<String, dynamic> menu; // {id, title, price, props}
+  final Map<String, dynamic> menu; // {id, title, price, props, maxProduk}
   int qty;
-  final List<Map<String, dynamic>> props; // props terpilih {id, title, quantity}
+  final List<Map<String, dynamic>>
+  props; // props terpilih {id, title, quantity}
   _BigLine({required this.menu, required this.qty, required this.props});
 
   int get price => (menu['price'] as num?)?.toInt() ?? 0;
   int get total => price * qty;
+
+  /// Isi per unit dari master menu. `> 0` menandai produk paket/collection —
+  /// sama seperti `collection: e['maxProduk'] != 0` di halaman kasir.
+  int get maxPerUnit => (menu['maxProduk'] as num?)?.toInt() ?? 0;
+
+  bool get isPaket => maxPerUnit > 0;
+
+  /// Jumlah pcs isi yang harus terisi varian: isi per box × jumlah box.
+  /// Inilah angka yang dipotong dari stok saat serah terima — BUKAN [qty].
+  int get contentPcs => isPaket ? maxPerUnit * qty : qty;
+
+  int get propSum =>
+      props.fold(0, (s, p) => s + ((p['quantity'] as num?)?.toInt() ?? 0));
+
+  /// Label jumlah: paket menyebut box sekaligus total isinya.
+  String get qtyLabel => isPaket ? '$qty box · $contentPcs pcs' : '$qty pcs';
 }
 
 class BigOrderCreatePage extends StatefulWidget {
@@ -263,9 +280,18 @@ class _BigOrderCreatePageState extends State<BigOrderCreatePage> {
         content: Text(
           message,
           textAlign: TextAlign.center,
-          style: const TextStyle(fontSize: 14, color: Colors.black54, height: 1.5),
+          style: const TextStyle(
+            fontSize: 14,
+            color: Colors.black54,
+            height: 1.5,
+          ),
         ),
-        actionsPadding: const EdgeInsets.only(bottom: 20, left: 20, right: 20, top: 4),
+        actionsPadding: const EdgeInsets.only(
+          bottom: 20,
+          left: 20,
+          right: 20,
+          top: 4,
+        ),
         actions: [
           Row(
             children: [
@@ -274,11 +300,18 @@ class _BigOrderCreatePageState extends State<BigOrderCreatePage> {
                   onPressed: () => Navigator.pop(ctx, false),
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                     side: BorderSide(color: Colors.grey.shade300),
                   ),
-                  child: const Text('Batal',
-                      style: TextStyle(color: Colors.black87, fontWeight: FontWeight.w600)),
+                  child: const Text(
+                    'Batal',
+                    style: TextStyle(
+                      color: Colors.black87,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(width: 12),
@@ -288,10 +321,17 @@ class _BigOrderCreatePageState extends State<BigOrderCreatePage> {
                   style: FilledButton.styleFrom(
                     backgroundColor: AppColors.primary,
                     padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
-                  child: Text(confirmText,
-                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                  child: Text(
+                    confirmText,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -627,62 +667,62 @@ class _BigOrderCreatePageState extends State<BigOrderCreatePage> {
         ),
         if (_ongkirEnabled)
           _card(
-          num: '4',
-          title: 'Ongkos kirim',
-          trailing: 'default 0',
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              TextField(
-                controller: _ongkirCtrl,
-                keyboardType: TextInputType.number,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                onChanged: (v) =>
-                    setState(() => _ongkir = int.tryParse(v.trim()) ?? 0),
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                ),
-                decoration: InputDecoration(
-                  prefixText: 'Rp ',
-                  prefixStyle: const TextStyle(
+            num: '4',
+            title: 'Ongkos kirim',
+            trailing: 'default 0',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  controller: _ongkirCtrl,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  onChanged: (v) =>
+                      setState(() => _ongkir = int.tryParse(v.trim()) ?? 0),
+                  style: const TextStyle(
                     fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.black87,
+                    fontWeight: FontWeight.w700,
                   ),
-                  hintText: '0',
-                  isDense: true,
-                  filled: true,
-                  fillColor: Colors.grey.shade50,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide(color: Colors.grey.shade300),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide(color: Colors.grey.shade300),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(
-                      color: AppColors.primary,
-                      width: 1.5,
+                  decoration: InputDecoration(
+                    prefixText: 'Rp ',
+                    prefixStyle: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black87,
+                    ),
+                    hintText: '0',
+                    isDense: true,
+                    filled: true,
+                    fillColor: Colors.grey.shade50,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(color: Colors.grey.shade300),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(color: Colors.grey.shade300),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(
+                        color: AppColors.primary,
+                        width: 1.5,
+                      ),
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Isi 0 bila tanpa ongkir. Nilai final mengikuti aturan server.',
-                style: TextStyle(
-                  fontSize: 11.5,
-                  color: Colors.grey[500],
-                  height: 1.4,
+                const SizedBox(height: 8),
+                Text(
+                  'Isi 0 bila tanpa ongkir. Nilai final mengikuti aturan server.',
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    color: Colors.grey[500],
+                    height: 1.4,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
         _card(
           num: _ongkirEnabled ? '5' : '4',
           title: 'Keterangan',
@@ -758,7 +798,7 @@ class _BigOrderCreatePageState extends State<BigOrderCreatePage> {
           Row(
             children: [
               Text(
-                '${l.qty} pcs',
+                l.qtyLabel,
                 style: const TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 14,
@@ -783,7 +823,8 @@ class _BigOrderCreatePageState extends State<BigOrderCreatePage> {
           if (l.props.isNotEmpty) ...[
             const Divider(height: 16),
             Text(
-              'Tambahan: ${l.props.map((p) => '${p['title']} × ${p['quantity']}').join(' · ')}',
+              '${l.isPaket ? 'Isi paket' : 'Tambahan'}: '
+              '${l.props.map((p) => '${p['title']} × ${p['quantity']}').join(' · ')}',
               style: TextStyle(
                 fontSize: 12,
                 color: Colors.grey[600],
@@ -1715,14 +1756,27 @@ class _ReviewDialogState extends State<_ReviewDialog> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '${l.qty} pcs × ${convertIDR(l.price)}',
+                  '${l.qty} ${l.isPaket ? 'box' : 'pcs'} × ${convertIDR(l.price)}',
                   style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                 ),
+                if (l.isPaket)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(
+                      'Isi ${l.contentPcs} pcs (${l.maxPerUnit}×${l.qty})',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.blue.shade800,
+                      ),
+                    ),
+                  ),
                 if (l.props.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(top: 2),
                     child: Text(
-                      'Tambahan: ${l.props.map((p) => '${p['title']} × ${p['quantity']}').join(' · ')}',
+                      '${l.isPaket ? 'Isi paket' : 'Tambahan'}: '
+                      '${l.props.map((p) => '${p['title']} × ${p['quantity']}').join(' · ')}',
                       style: TextStyle(
                         fontSize: 11,
                         color: Colors.grey[500],
@@ -2195,6 +2249,21 @@ class _ItemSheetState extends State<_ItemSheet> {
 
   int get _qty => int.tryParse(_qtyCtrl.text.trim()) ?? 0;
 
+  /// Isi per unit dari master menu (`maxProduk`). `> 0` = produk paket.
+  int get _maxPerUnit => (_selected?['maxProduk'] as num?)?.toInt() ?? 0;
+
+  bool get _isPaket =>
+      _maxPerUnit > 0 && ((_selected?['props'] as List?) ?? []).isNotEmpty;
+
+  /// Target total varian = isi per box × jumlah box.
+  ///
+  /// PENTING: `props[].quantity` yang dikirim ke server bersifat ABSOLUT untuk
+  /// seluruh baris — server TIDAK mengalikannya lagi dengan `quantity` baris
+  /// (lihat `BomCalculator.materialsForLine`). Jadi angka inilah yang benar-
+  /// benar dipotong dari stok saat serah terima. Aturannya sama dengan halaman
+  /// kasir: total varian harus pas `maxProduk × quantity`.
+  int get _propTarget => _isPaket ? _maxPerUnit * _qty : _qty;
+
   // Total jumlah semua varian yang dicentang.
   int get _propSum {
     int s = 0;
@@ -2217,15 +2286,12 @@ class _ItemSheetState extends State<_ItemSheet> {
       return;
     }
     final propsList = (_selected!['props'] as List?) ?? [];
-    final hasProps = propsList.isNotEmpty;
 
-    if (hasProps) {
+    if (_isPaket) {
       // Paket wajib pilih minimal satu varian.
       final anySelected = propsList.any((p) => _propQty.containsKey(p['id']));
       if (!anySelected) {
-        setState(
-          () => _error = 'Paket ini wajib memilih varian tambahannya dulu.',
-        );
+        setState(() => _error = 'Paket ini wajib memilih varian isinya dulu.');
         return;
       }
       // Tiap varian yang dicentang wajib diisi jumlahnya.
@@ -2241,14 +2307,16 @@ class _ItemSheetState extends State<_ItemSheet> {
           return;
         }
       }
-      // Total varian harus PAS dengan jumlah item.
-      if (_propSum != _qty) {
-        final selisih = _propSum - _qty;
+      // Total varian harus PAS dengan kapasitas paket (isi per box × jumlah
+      // box). Kalau kurang, stok yang terpotong saat serah terima ikut kurang.
+      if (_propSum != _propTarget) {
+        final selisih = _propSum - _propTarget;
         final arah = selisih > 0 ? 'kelebihan' : 'kurang';
         setState(
           () => _error =
-              'Total varian harus pas $_qty pcs (sekarang $_propSum pcs, '
-              '$arah ${selisih.abs()} pcs).',
+              'Total isi harus pas $_propTarget pcs '
+              '($_maxPerUnit × $_qty box). Sekarang $_propSum pcs, '
+              '$arah ${selisih.abs()} pcs.',
         );
         return;
       }
@@ -2350,6 +2418,9 @@ class _ItemSheetState extends State<_ItemSheet> {
                   itemBuilder: (context, i) {
                     final p = items[i];
                     final price = (p['price'] as num?)?.toInt() ?? 0;
+                    final perUnit = (p['maxProduk'] as num?)?.toInt() ?? 0;
+                    final isPaket =
+                        perUnit > 0 && ((p['props'] as List?) ?? []).isNotEmpty;
                     return InkWell(
                       onTap: () => setState(() {
                         _selected = p;
@@ -2366,16 +2437,56 @@ class _ItemSheetState extends State<_ItemSheet> {
                         child: Row(
                           children: [
                             Expanded(
-                              child: Text(
-                                (p['title'] ?? '-').toString(),
-                                style: const TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w600,
-                                ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    (p['title'] ?? '-').toString(),
+                                    style: const TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  if (isPaket) ...[
+                                    const SizedBox(height: 3),
+                                    Row(
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 7,
+                                            vertical: 2,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: Colors.teal.shade600,
+                                            borderRadius: BorderRadius.circular(
+                                              4,
+                                            ),
+                                          ),
+                                          child: const Text(
+                                            'PAKET',
+                                            style: TextStyle(
+                                              fontSize: 9.5,
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Text(
+                                          'isi $perUnit pcs / box',
+                                          style: TextStyle(
+                                            fontSize: 11.5,
+                                            color: Colors.grey[600],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ],
                               ),
                             ),
                             Text(
-                              '${convertIDR(price)} / pcs',
+                              '${convertIDR(price)} / ${isPaket ? 'box' : 'pcs'}',
                               style: TextStyle(
                                 fontSize: 13,
                                 color: Colors.grey[600],
@@ -2400,9 +2511,9 @@ class _ItemSheetState extends State<_ItemSheet> {
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              const Text(
-                'Jumlah',
-                style: TextStyle(
+              Text(
+                _isPaket ? 'Jumlah box' : 'Jumlah',
+                style: const TextStyle(
                   fontSize: 12,
                   letterSpacing: 0.8,
                   fontWeight: FontWeight.bold,
@@ -2421,7 +2532,7 @@ class _ItemSheetState extends State<_ItemSheet> {
                   fontWeight: FontWeight.bold,
                 ),
                 decoration: InputDecoration(
-                  suffixText: 'pcs',
+                  suffixText: _isPaket ? 'box' : 'pcs',
                   hintText: '0',
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
@@ -2438,12 +2549,49 @@ class _ItemSheetState extends State<_ItemSheet> {
                   );
                 }).toList(),
               ),
-              if (propsList.isNotEmpty) ...[
+              if (_isPaket) ...[
                 const SizedBox(height: 18),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE8F1FF),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFFB6D4FF)),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.inventory_2_outlined,
+                        size: 18,
+                        color: Colors.blue.shade700,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _qty > 0
+                              ? 'Paket · isi $_maxPerUnit pcs per box. '
+                                    'Max isi: $_propTarget ($_maxPerUnit×$_qty)'
+                              : 'Paket · isi $_maxPerUnit pcs per box.',
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.blue.shade900,
+                            height: 1.35,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
                 Row(
                   children: [
                     const Text(
-                      'Tambahan untuk baris ini',
+                      'Isi paket (varian)',
                       style: TextStyle(
                         fontSize: 12,
                         letterSpacing: 0.8,
@@ -2454,11 +2602,11 @@ class _ItemSheetState extends State<_ItemSheet> {
                     const Spacer(),
                     if (_qty > 0)
                       Text(
-                        'Terisi $_propSum / $_qty pcs',
+                        'Terisi $_propSum / $_propTarget pcs',
                         style: TextStyle(
                           fontSize: 11.5,
                           fontWeight: FontWeight.bold,
-                          color: _propSum == _qty
+                          color: _propSum == _propTarget
                               ? Colors.green.shade700
                               : Colors.orange.shade800,
                         ),
@@ -2525,11 +2673,12 @@ class _ItemSheetState extends State<_ItemSheet> {
                                     ],
                                     textAlign: TextAlign.center,
                                     onChanged: (v) {
-                                      // Batasi maksimal = jumlah item.
+                                      // Batasi maksimal = kapasitas paket
+                                      // (isi per box × jumlah box).
                                       final n = int.tryParse(v.trim()) ?? 0;
-                                      if (_qty > 0 && n > _qty) {
+                                      if (_propTarget > 0 && n > _propTarget) {
                                         final c = _propQty[id]!;
-                                        c.text = '$_qty';
+                                        c.text = '$_propTarget';
                                         c.selection = TextSelection.collapsed(
                                           offset: c.text.length,
                                         );
@@ -2580,8 +2729,13 @@ class _ItemSheetState extends State<_ItemSheet> {
                 }),
                 const SizedBox(height: 4),
                 Text(
-                  'Total semua varian harus pas dengan jumlah item ($_qty pcs).',
-                  style: TextStyle(fontSize: 11.5, color: Colors.grey[500]),
+                  'Total isi semua varian harus pas $_propTarget pcs — inilah '
+                  'jumlah yang dipotong dari stok saat serah terima.',
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    color: Colors.grey[500],
+                    height: 1.4,
+                  ),
                 ),
               ],
             ],
@@ -2634,7 +2788,9 @@ class _ItemSheetState extends State<_ItemSheet> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          '$_qty pcs',
+                          _isPaket
+                              ? '$_qty box · $_propTarget pcs'
+                              : '$_qty pcs',
                           style: TextStyle(
                             fontSize: 13,
                             color: Colors.grey[600],

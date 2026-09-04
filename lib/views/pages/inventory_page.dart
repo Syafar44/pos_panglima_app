@@ -56,15 +56,22 @@ class _InventoryPageState extends State<InventoryPage> {
   int soPageNumber = 1;
   Map<String, dynamic>? soPaginationInfo;
 
+  /// Saklar tampil/sembunyi menu Monthly Stock Opname.
+  ///
+  /// Set ke `false` untuk menyembunyikan tab-nya sementara — seluruh kode
+  /// panel, service, dan halaman detailnya tetap utuh, hanya tidak dirender.
+  static const bool monthlySoEnabled = true;
+
   // Monthly Stock Opname (/pos/monthly-stock-opname).
   List monthlySoList = [];
   bool isLoadingMonthlySO = false;
   bool monthlySoIsEmpty = false;
   int monthlySoPageNumber = 1;
   Map<String, dynamic>? monthlySoPaginationInfo;
-  // Status case-sensitive di server: 'draft' huruf kecil mengembalikan daftar
-  // kosong, bukan error.
-  String monthlySoStatus = 'Draft';
+  // Default tanpa filter status ('' = semua) supaya seluruh dokumen terlihat.
+  // Saat diisi, nilainya case-sensitive di server: 'draft' huruf kecil
+  // mengembalikan daftar kosong, bukan error.
+  String monthlySoStatus = '';
   String monthlySoSearch = '';
   final monthlySoSearchCtrl = TextEditingController();
   Timer? monthlySoSearchDebounce;
@@ -97,7 +104,7 @@ class _InventoryPageState extends State<InventoryPage> {
     getCustomerId();
     // Cakupan gudang Monthly SO diturunkan server dari token, jadi daftarnya
     // tidak menunggu profil/outlet seperti menu lain.
-    if (isBackSO.value == false) fetchListMonthlySO();
+    if (monthlySoEnabled && isBackSO.value == false) fetchListMonthlySO();
   }
 
   @override
@@ -243,7 +250,7 @@ class _InventoryPageState extends State<InventoryPage> {
         monthlySoNoWarehouse =
             list.isEmpty &&
             monthlySoSearch.isEmpty &&
-            monthlySoStatus == 'Draft' &&
+            monthlySoStatus.isEmpty &&
             ((metadata?['total'] as num?)?.toInt() ?? 0) == 0;
       });
     } catch (e, stack) {
@@ -281,9 +288,11 @@ class _InventoryPageState extends State<InventoryPage> {
     });
   }
 
+  /// Pilih filter status. Menekan chip yang sedang aktif mematikannya kembali
+  /// (kembali ke tanpa filter) — pengganti chip "Semua".
   void selectMonthlySoStatus(String status) {
     setState(() {
-      monthlySoStatus = status;
+      monthlySoStatus = monthlySoStatus == status ? '' : status;
       monthlySoPageNumber = 1;
     });
     fetchListMonthlySO();
@@ -567,11 +576,12 @@ class _InventoryPageState extends State<InventoryPage> {
                             icon: Icons.inventory_outlined,
                             label: 'Pemakaian Barang',
                           ),
-                          _buildMenuItem(
-                            index: 5,
-                            icon: Icons.event_note_rounded,
-                            label: 'Monthly Stock Opname',
-                          ),
+                          if (monthlySoEnabled)
+                            _buildMenuItem(
+                              index: 5,
+                              icon: Icons.event_note_rounded,
+                              label: 'Monthly Stock Opname',
+                            ),
                         ],
                       ),
                     ),
@@ -595,7 +605,7 @@ class _InventoryPageState extends State<InventoryPage> {
                 return reject();
               } else if (value == 4) {
                 return pemakaianBarang();
-              } else if (value == 5) {
+              } else if (value == 5 && monthlySoEnabled) {
                 return monthlyStockOpname();
               } else {
                 return const SizedBox.shrink();
@@ -1661,8 +1671,10 @@ class _InventoryPageState extends State<InventoryPage> {
           Icon(Icons.event_note_rounded, size: 80, color: Colors.grey[300]),
           const SizedBox(height: 16),
           Text(
-            'Tidak ada dokumen '
-            '${MonthlyStockOpnameService.statusLabel(monthlySoStatus).toLowerCase()}',
+            monthlySoStatus.isEmpty
+                ? 'Tidak ada dokumen Stock Opname Bulanan'
+                : 'Tidak ada dokumen '
+                      '${MonthlyStockOpnameService.statusLabel(monthlySoStatus).toLowerCase()}',
             style: TextStyle(color: Colors.grey[600], fontSize: 16),
           ),
         ],

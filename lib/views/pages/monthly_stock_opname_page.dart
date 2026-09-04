@@ -83,7 +83,12 @@ class _SoLine {
 
   String get localRemarks => remarksController.text.trim();
 
-  bool get isCounted => localQty != null;
+  /// Baris ini sudah pernah dihitung di server (dari HP atau dari web).
+  /// `counted_at` adalah penanda resminya menurut dokumen API — bukan
+  /// `actual_qty`, karena server bisa mengirim `0` sebagai nilai bawaan.
+  bool get everCountedOnServer => countedAt != null && countedAt!.isNotEmpty;
+
+  bool get isCounted => localQty != null || everCountedOnServer;
 
   /// Perlu dikirim ke server. Kolom yang dikosongkan kembali tidak dikirim —
   /// tidak ada cara membatalkan hitungan lewat API.
@@ -114,20 +119,46 @@ class _SoLine {
     'dirty': isDirty,
   };
 
-  factory _SoLine.fromLocalJson(Map<String, dynamic> json) => _SoLine(
-    lineId: (json['line_id'] as num).toInt(),
-    itemCode: json['item_code']?.toString() ?? '',
-    itemName: json['item_name']?.toString() ?? '',
-    uomCode: json['uom_code']?.toString(),
-    serverQty: (json['server_qty'] as num?)?.toDouble(),
-    serverRemarks: json['server_remarks']?.toString(),
-    countedAt: json['counted_at']?.toString(),
-    localQty: (json['local_qty'] as num?)?.toDouble(),
-    localRemarks: json['local_remarks']?.toString(),
-  );
+  /// Nilai dari server yang boleh dianggap "hasil hitung".
+  ///
+  /// `actual_qty: 0` hanya berarti "stok habis" kalau `counted_at` terisi.
+  /// Tanpa `counted_at`, angka 0 itu nilai bawaan untuk baris yang BELUM
+  /// dihitung — kolomnya harus tampil kosong dan tidak boleh ikut terhitung.
+  /// Angka selain 0 tetap dipakai supaya tidak ada isian yang hilang.
+  static double? _countedQty(double? rawQty, String? countedAt) {
+    final everCounted = countedAt != null && countedAt.isNotEmpty;
+    if (everCounted) return rawQty;
+    if (rawQty == null || rawQty == 0) return null;
+    return rawQty;
+  }
+
+  factory _SoLine.fromLocalJson(Map<String, dynamic> json) {
+    final countedAt = json['counted_at']?.toString();
+    final serverQty = _countedQty(
+      (json['server_qty'] as num?)?.toDouble(),
+      countedAt,
+    );
+    return _SoLine(
+      lineId: (json['line_id'] as num).toInt(),
+      itemCode: json['item_code']?.toString() ?? '',
+      itemName: json['item_name']?.toString() ?? '',
+      uomCode: json['uom_code']?.toString(),
+      serverQty: serverQty,
+      serverRemarks: json['server_remarks']?.toString(),
+      countedAt: countedAt,
+      // Isian lokal TIDAK disaring: `0` yang diketik petugas berarti stok
+      // memang habis dan harus tetap tampil.
+      localQty: (json['local_qty'] as num?)?.toDouble(),
+      localRemarks: json['local_remarks']?.toString(),
+    );
+  }
 
   factory _SoLine.fromApi(Map<String, dynamic> json) {
-    final qty = (json['actual_qty'] as num?)?.toDouble();
+    final countedAt = json['counted_at']?.toString();
+    final qty = _countedQty(
+      (json['actual_qty'] as num?)?.toDouble(),
+      countedAt,
+    );
     final remarks = json['remarks']?.toString();
     return _SoLine(
       lineId: (json['line_id'] as num).toInt(),
@@ -136,7 +167,7 @@ class _SoLine {
       uomCode: json['uom_code']?.toString(),
       serverQty: qty,
       serverRemarks: remarks,
-      countedAt: json['counted_at']?.toString(),
+      countedAt: countedAt,
       localQty: qty,
       localRemarks: remarks,
     );
@@ -314,7 +345,6 @@ class _MonthlyStockOpnamePageState extends State<MonthlyStockOpnamePage> {
       final apiLines = (data['lines'] as List? ?? [])
           .map((e) => Map<String, dynamic>.from(e as Map))
           .toList();
-
       // Baris sudah diurutkan item_name A→Z, sama dengan urutan cetak.
       // Jangan diurutkan ulang.
       for (final line in _lines) {
@@ -1259,6 +1289,92 @@ class _MonthlyStockOpnamePageState extends State<MonthlyStockOpnamePage> {
 
   Widget _buildItemCard(_SoLine line) {
     final counted = line.isCounted;
+
+    // Kode item, penanda status, dan nama item.
+    final info = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: AppColors.primaryLight,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                line.itemCode,
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.primaryDark,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            if (!counted)
+              Text(
+                'Belum dihitung',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.orange.shade800,
+                ),
+              )
+            else if (line.isDirty)
+              Text(
+                'Belum tersinkron',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.blueGrey.shade400,
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Text(
+          line.itemName,
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: Colors.black87,
+          ),
+        ),
+      ],
+    );
+
+    final qtyField = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildLabel('Qty Aktual'),
+        _buildTextField(
+          controller: line.qtyController,
+          hint: '',
+          // Satuan hanya label — tidak bisa diubah, tidak ada konversi.
+          uomCode: (line.uomCode?.isNotEmpty ?? false) ? line.uomCode : '–',
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          inputFormatters: [
+            // Maksimal 4 desimal (lebih dari itu dibulatkan server).
+            FilteringTextInputFormatter.allow(RegExp(r'^\d*[.,]?\d{0,4}')),
+          ],
+          highlight: !counted,
+        ),
+      ],
+    );
+
+    final remarksField = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildLabel('Keterangan'),
+        _buildTextField(
+          controller: line.remarksController,
+          hint: 'Keterangan (opsional)',
+          maxLength: 255,
+        ),
+      ],
+    );
+
     return Container(
       key: ValueKey(line.lineId),
       margin: const EdgeInsets.only(bottom: 12),
@@ -1281,112 +1397,35 @@ class _MonthlyStockOpnamePageState extends State<MonthlyStockOpnamePage> {
           ),
         ],
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Expanded(
-            flex: 3,
-            child: Column(
+      // Mode potret: layar jauh lebih sempit, jadi Keterangan turun ke bawah
+      // nama item & Qty Aktual supaya kolomnya lebih lega — tetap dalam satu
+      // kartu yang sama.
+      child: _isPortrait
+          ? Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.primaryLight,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        line.itemCode,
-                        style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.primaryDark,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    if (!counted)
-                      Text(
-                        'Belum dihitung',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.orange.shade800,
-                        ),
-                      )
-                    else if (line.isDirty)
-                      Text(
-                        'Belum tersinkron',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.blueGrey.shade400,
-                        ),
-                      ),
+                    Expanded(flex: 3, child: info),
+                    const SizedBox(width: 12),
+                    Expanded(flex: 2, child: qtyField),
                   ],
                 ),
-                const SizedBox(height: 6),
-                Text(
-                  line.itemName,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.black87,
-                  ),
-                ),
+                const SizedBox(height: 12),
+                remarksField,
               ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            flex: 1,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            )
+          : Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                _buildLabel('Qty Aktual'),
-                _buildTextField(
-                  controller: line.qtyController,
-                  hint: '',
-                  // Satuan hanya label — tidak bisa diubah, tidak ada konversi.
-                  uomCode: (line.uomCode?.isNotEmpty ?? false)
-                      ? line.uomCode
-                      : '–',
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  inputFormatters: [
-                    // Maksimal 4 desimal (lebih dari itu dibulatkan server).
-                    FilteringTextInputFormatter.allow(
-                      RegExp(r'^\d*[.,]?\d{0,4}'),
-                    ),
-                  ],
-                  highlight: !counted,
-                ),
+                Expanded(flex: 3, child: info),
+                const SizedBox(width: 12),
+                Expanded(flex: 1, child: qtyField),
+                const SizedBox(width: 10),
+                Expanded(flex: 3, child: remarksField),
               ],
             ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            flex: 3,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildLabel('Keterangan'),
-                _buildTextField(
-                  controller: line.remarksController,
-                  hint: 'Keterangan (opsional)',
-                  maxLength: 255,
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
     );
   }
 

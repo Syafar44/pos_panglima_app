@@ -804,7 +804,8 @@ class _BigOrderDetailPageState extends State<BigOrderDetailPage> {
     final name = (e['pos_menus_name'] ?? e['item_name'] ?? '-').toString();
     final qty = (e['quantity'] as num?)?.toInt() ?? 0;
     final price = (e['price'] as num?)?.toInt() ?? 0;
-    final total = (e['total'] as num?)?.toInt() ??
+    final total =
+        (e['total'] as num?)?.toInt() ??
         (e['subtotal'] as num?)?.toInt() ??
         price * qty;
     final props = (e['pos_order_lines_props'] as List?) ?? [];
@@ -813,7 +814,9 @@ class _BigOrderDetailPageState extends State<BigOrderDetailPage> {
       padding: EdgeInsets.only(top: 4, bottom: last ? 0 : 12),
       margin: EdgeInsets.only(bottom: last ? 0 : 12),
       decoration: BoxDecoration(
-        border: last ? null : Border(bottom: BorderSide(color: Colors.grey.shade200)),
+        border: last
+            ? null
+            : Border(bottom: BorderSide(color: Colors.grey.shade200)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -824,7 +827,10 @@ class _BigOrderDetailPageState extends State<BigOrderDetailPage> {
               Expanded(
                 child: Text(
                   name,
-                  style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600),
+                  style: const TextStyle(
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
               const SizedBox(width: 8),
@@ -850,9 +856,25 @@ class _BigOrderDetailPageState extends State<BigOrderDetailPage> {
                 padding: const EdgeInsets.only(top: 1),
                 child: Text(
                   '• ${(p['quantity'] as num?)?.toInt() ?? 0}× ${(p['pos_menus_name'] ?? '-')}',
-                  style: TextStyle(fontSize: 12, color: Colors.grey[600], height: 1.4),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[600],
+                    height: 1.4,
+                  ),
                 ),
               ),
+            const SizedBox(height: 4),
+            // Jumlah varian bersifat absolut untuk seluruh baris — inilah pcs
+            // yang dipotong dari stok saat serah terima. Ditampilkan supaya
+            // kasir bisa memeriksa isi paket sebelum menyerahkan barang.
+            Text(
+              'Total isi: ${props.fold<int>(0, (s, p) => s + ((p['quantity'] as num?)?.toInt() ?? 0))} pcs',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Colors.blue.shade800,
+              ),
+            ),
           ],
         ],
       ),
@@ -936,10 +958,7 @@ class _BigOrderDetailPageState extends State<BigOrderDetailPage> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  [
-                    dateLabel,
-                    if (user.isNotEmpty) user,
-                  ].join(' · '),
+                  [dateLabel, if (user.isNotEmpty) user].join(' · '),
                   style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                 ),
               ],

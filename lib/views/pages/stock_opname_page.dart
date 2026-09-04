@@ -51,6 +51,10 @@ class _StockOpnameItem {
         remarksController.text.trim() != _baselineRemarks;
   }
 
+  /// Baris dianggap sudah dihitung bila kolom Qty Aktual terisi. Mengikuti
+  /// konvensi halaman ini: kolom kosong = 0 saat dikirim ke server.
+  bool get isCounted => qtyController.text.trim().isNotEmpty;
+
   void commitBaseline() {
     _baselineQty = int.tryParse(qtyController.text.trim()) ?? 0;
     _baselineRemarks = remarksController.text.trim();
@@ -81,6 +85,29 @@ class _StockOpnamePageState extends State<StockOpnamePage> {
   Map<String, dynamic>? detail;
   List<_StockOpnameItem> items = [];
 
+  // Pencarian & filter daftar item (mengikuti halaman Monthly Stock Opname).
+  final _searchController = TextEditingController();
+  String _search = '';
+  bool _onlyUncounted = false;
+
+  int get _countedCount => items.where((i) => i.isCounted).length;
+  int get _uncountedCount => items.length - _countedCount;
+
+  /// Item yang lolos pencarian & filter. Daftar yang dikirim ke server tetap
+  /// memakai [items] utuh, jadi filter di sini murni tampilan.
+  List<_StockOpnameItem> get _visibleItems {
+    final q = _search.toLowerCase();
+    return items.where((item) {
+      if (_onlyUncounted && item.isCounted) return false;
+      if (q.isEmpty) return true;
+      return item.itemName.toLowerCase().contains(q) ||
+          item.itemCode.toLowerCase().contains(q);
+    }).toList();
+  }
+
+  /// Qty berubah → segarkan hitungan chip & filter "belum terhitung".
+  void _onItemEdited() => setState(() {});
+
   @override
   void initState() {
     super.initState();
@@ -107,6 +134,7 @@ class _StockOpnamePageState extends State<StockOpnamePage> {
 
   @override
   void dispose() {
+    _searchController.dispose();
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.landscapeLeft,
       DeviceOrientation.landscapeRight,
@@ -141,6 +169,9 @@ class _StockOpnamePageState extends State<StockOpnamePage> {
             ),
           )
           .toList();
+      for (final item in newItems) {
+        item.qtyController.addListener(_onItemEdited);
+      }
 
       if (!mounted) return;
       setState(() {
@@ -586,6 +617,7 @@ class _StockOpnamePageState extends State<StockOpnamePage> {
             : Column(
                 children: [
                   _buildHeader(),
+                  _buildToolbar(),
                   Expanded(child: _buildItemList()),
                   if (!_isReadOnly()) _buildBottomBar(),
                 ],
@@ -721,6 +753,97 @@ class _StockOpnamePageState extends State<StockOpnamePage> {
     );
   }
 
+  /// Pencarian nama/kode item + filter "belum terhitung". Untuk dokumen
+  /// berisi ratusan baris, mencari sisa yang terlewat tanpa filter adalah
+  /// pekerjaan tersendiri.
+  Widget _buildToolbar() {
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      child: Row(
+        children: [
+          Expanded(
+            child: SizedBox(
+              height: 42,
+              child: TextField(
+                controller: _searchController,
+                onChanged: (v) => setState(() => _search = v.trim()),
+                style: const TextStyle(fontSize: 14),
+                decoration: InputDecoration(
+                  hintText: 'Cari nama atau kode item',
+                  hintStyle: TextStyle(color: Colors.grey[400], fontSize: 13),
+                  prefixIcon: const Icon(Icons.search, size: 20),
+                  suffixIcon: _search.isEmpty
+                      ? null
+                      : IconButton(
+                          icon: const Icon(Icons.close_rounded, size: 18),
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() => _search = '');
+                          },
+                        ),
+                  isDense: true,
+                  filled: true,
+                  fillColor: Colors.grey.shade50,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(color: Colors.grey.shade300),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(color: Colors.grey.shade300),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(
+                      color: AppColors.primary,
+                      width: 1.5,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          GestureDetector(
+            onTap: () => setState(() => _onlyUncounted = !_onlyUncounted),
+            child: Container(
+              height: 42,
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              decoration: BoxDecoration(
+                color: _onlyUncounted ? AppColors.primary : Colors.white,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: _onlyUncounted
+                      ? AppColors.primary
+                      : Colors.grey.shade300,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.filter_alt_outlined,
+                    size: 17,
+                    color: _onlyUncounted ? Colors.white : Colors.grey[600],
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Belum terhitung ($_uncountedCount)',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: _onlyUncounted ? Colors.white : Colors.grey[700],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildItemList() {
     if (items.isEmpty) {
       return Center(
@@ -737,17 +860,100 @@ class _StockOpnamePageState extends State<StockOpnamePage> {
         ),
       );
     }
+
+    final visible = _visibleItems;
+    if (visible.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.search_off_rounded, size: 72, color: Colors.grey[300]),
+            const SizedBox(height: 14),
+            Text(
+              _onlyUncounted
+                  ? 'Semua item sudah dihitung'
+                  : 'Item tidak ditemukan',
+              style: TextStyle(color: Colors.grey[600], fontSize: 15),
+            ),
+          ],
+        ),
+      );
+    }
+
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-      itemCount: items.length,
-      itemBuilder: (context, index) => _buildItemCard(index),
+      itemCount: visible.length,
+      itemBuilder: (context, index) => _buildItemCard(visible[index]),
     );
   }
 
-  Widget _buildItemCard(int index) {
-    final item = items[index];
+  Widget _buildItemCard(_StockOpnameItem item) {
     final readOnly = _isReadOnly();
+
+    // Kode item dan nama item.
+    final info = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: AppColors.primaryLight,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                item.itemCode,
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.primaryDark,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Text(
+          item.itemName,
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: Colors.black87,
+          ),
+        ),
+      ],
+    );
+
+    final qtyField = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildLabel('Qty Aktual'),
+        _buildTextField(
+          controller: item.qtyController,
+          hint: '0',
+          uomCode: item.uomCode,
+          keyboardType: TextInputType.number,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          readOnly: readOnly,
+        ),
+      ],
+    );
+
+    final remarksField = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildLabel('Keterangan'),
+        _buildTextField(
+          controller: item.remarksController,
+          hint: 'Keterangan (opsional)',
+          readOnly: readOnly,
+        ),
+      ],
+    );
+
     return Container(
+      key: ValueKey(item.id),
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -761,83 +967,35 @@ class _StockOpnamePageState extends State<StockOpnamePage> {
           ),
         ],
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Expanded(
-            flex: 3,
-            child: Column(
+      // Mode potret: layar jauh lebih sempit, jadi Keterangan turun ke bawah
+      // nama item & Qty Aktual supaya kolomnya lebih lega — tetap dalam satu
+      // kartu yang sama.
+      child: _isPortrait
+          ? Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.primaryLight,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        item.itemCode,
-                        style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.primaryDark,
-                        ),
-                      ),
-                    ),
+                    Expanded(flex: 3, child: info),
+                    const SizedBox(width: 12),
+                    Expanded(flex: 2, child: qtyField),
                   ],
                 ),
-                const SizedBox(height: 6),
-                Text(
-                  item.itemName,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.black87,
-                  ),
-                ),
+                const SizedBox(height: 12),
+                remarksField,
               ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            flex: 1,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            )
+          : Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                _buildLabel('Qty Aktual'),
-                _buildTextField(
-                  controller: item.qtyController,
-                  hint: '0',
-                  uomCode: item.uomCode,
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  readOnly: readOnly,
-                ),
+                Expanded(flex: 3, child: info),
+                const SizedBox(width: 12),
+                Expanded(flex: 1, child: qtyField),
+                const SizedBox(width: 10),
+                Expanded(flex: 3, child: remarksField),
               ],
             ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            flex: 3,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildLabel('Keterangan'),
-                _buildTextField(
-                  controller: item.remarksController,
-                  hint: 'Keterangan (opsional)',
-                  readOnly: readOnly,
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
     );
   }
 

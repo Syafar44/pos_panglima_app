@@ -150,9 +150,11 @@ class MonthlyStockOpnameService {
     }
   }
 
-  /// Label status ramah untuk chip.
+  /// Label status ramah untuk chip. String kosong = tanpa filter status.
   static String statusLabel(String status) {
     switch (status) {
+      case '':
+        return 'Semua';
       case 'Draft':
         return 'Draft';
       case 'Submitted':
